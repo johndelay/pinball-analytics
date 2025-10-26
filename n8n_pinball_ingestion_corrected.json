@@ -1,0 +1,157 @@
+{
+  "name": "Pinball Leaderboard Ingestion - Corrected",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300],
+      "id": "node-1-trigger",
+      "name": "1. Every 10 Minutes"
+    },
+    {
+      "parameters": {
+        "url": "https://api.prd.sternpinball.io/api/v1/portal/leaderboards/?event_code=hJjW-WXu-oCGQ&event_state=current&format=json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 300],
+      "id": "node-2-fetch",
+      "name": "2. Fetch Stern API"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO Api_Snapshots (event_code, fetched_at, raw_response)\nVALUES (\n  $1::varchar,\n  NOW(),\n  $2::jsonb\n)\nRETURNING *;",
+        "options": {
+          "queryReplacement": "={{ [ $json.leaderboard.code, JSON.stringify($json) ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [650, 300],
+      "id": "node-3-snapshot",
+      "name": "3. Store API Snapshot"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawResponse = $input.first().json;\nconst leaderboard = rawResponse.leaderboard;\n\n// Extract event metadata\nconst eventCode = leaderboard.code;\nconst eventName = leaderboard.name;\nconst startDate = leaderboard.start_date;\nconst stopDate = leaderboard.stop_date;\n\n// Build machine map: title_name -> title_code\nconst machineMap = {};\nconst machineDetails = {};\nfor (const title of leaderboard.titles || []) {\n  machineMap[title.title_name] = title.title_code;\n  machineDetails[title.title_code] = {\n    machine_id: title.title_code,\n    machine_name: title.title_name\n  };\n}\n\n// Parse scores\nconst scores = [];\nfor (const score of leaderboard.scores || []) {\n  const machineId = machineMap[score.title_name];\n  if (!machineId) continue;\n  \n  scores.push({\n    player_id: score.username,\n    display_name: score.username,\n    initials: score.initials,\n    avatar_url: score.avatar_path,\n    is_all_access: score.is_all_accesss || false,\n    machine_id: machineId,\n    machine_name: score.title_name,\n    high_score: score.score,\n    event_code: eventCode\n  });\n}\n\n// Output 0: Event metadata (single item)\nconst metadataOutput = [{\n  json: {\n    event_code: eventCode,\n    event_name: eventName,\n    start_date: startDate,\n    stop_date: stopDate,\n    machines: Object.values(machineDetails)\n  }\n}];\n\n// Output 1: Scores array (multiple items)\nconst scoresOutput = scores.map(s => ({ json: s }));\n\nreturn [metadataOutput, scoresOutput];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300],
+      "id": "node-4-parse",
+      "name": "4. Parse Data"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO Events (event_code, event_name, start_date, stop_date, location_id)\nVALUES ($1, $2, $3::timestamp, $4::timestamp, '11440')\nON CONFLICT (event_code) DO UPDATE SET\n  event_name = EXCLUDED.event_name,\n  start_date = EXCLUDED.start_date,\n  stop_date = EXCLUDED.stop_date\nRETURNING *;",
+        "options": {
+          "queryReplacement": "={{ [ $json.event_code, $json.event_name, $json.start_date, $json.stop_date ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1050, 200],
+      "id": "node-5-event",
+      "name": "5. Upsert Event"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Upsert Player\nINSERT INTO Players (player_id, display_name, avatar_url, is_all_access, last_seen)\nVALUES ($1, $2, $3, $4::boolean, NOW())\nON CONFLICT (player_id) DO UPDATE SET\n  last_seen = NOW();\n\n-- Upsert Machine\nINSERT INTO Machines (machine_id, machine_name, is_active)\nVALUES ($5, $6, true)\nON CONFLICT (machine_id) DO NOTHING;\n\n-- Pass through the score data\nSELECT $1 as player_id, $5 as machine_id, $7::bigint as high_score, $8 as event_code;",
+        "options": {
+          "queryReplacement": "={{ [ $json.player_id, $json.display_name, $json.avatar_url, $json.is_all_access, $json.machine_id, $json.machine_name, $json.high_score, $json.event_code ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1050, 400],
+      "id": "node-6-players",
+      "name": "6. Upsert Players/Machines"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Find max existing score for this player/machine/event\nWITH existing_max AS (\n  SELECT COALESCE(MAX(high_score), 0) as max_score\n  FROM High_Scores_Archive\n  WHERE player_id = $1\n    AND machine_id = $2\n    AND event_code = $3\n)\nSELECT \n  $1 as player_id,\n  $2 as machine_id,\n  $4::bigint as high_score,\n  $3 as event_code,\n  'API' as score_source,\n  true as is_approved\nFROM existing_max\nWHERE $4::bigint > max_score;",
+        "options": {
+          "queryReplacement": "={{ [ $json.player_id, $json.machine_id, $json.event_code, $json.high_score ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1250, 400],
+      "id": "node-7-filter",
+      "name": "7. Filter Higher Scores"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO High_Scores_Archive (player_id, machine_id, high_score, date_set, event_code, score_source, is_approved)\nVALUES ($1, $2, $3::bigint, NOW(), $4, $5, $6::boolean)\nRETURNING *;",
+        "options": {
+          "queryReplacement": "={{ [ $json.player_id, $json.machine_id, $json.high_score, $json.event_code, $json.score_source, $json.is_approved ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1450, 400],
+      "id": "node-8-insert",
+      "name": "8. Insert High Scores"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT update_combined_leaderboard(\n  $1::timestamp,\n  $2::timestamp,\n  $3\n);",
+        "options": {
+          "queryReplacement": "={{ [ $('5. Upsert Event').first().json.start_date, $('5. Upsert Event').first().json.stop_date, $('5. Upsert Event').first().json.event_code ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1650, 300],
+      "id": "node-9-recalc",
+      "name": "9. Recalculate Leaderboard"
+    }
+  ],
+  "connections": {
+    "1. Every 10 Minutes": {
+      "main": [[{"node": "2. Fetch Stern API", "type": "main", "index": 0}]]
+    },
+    "2. Fetch Stern API": {
+      "main": [[{"node": "3. Store API Snapshot", "type": "main", "index": 0}]]
+    },
+    "3. Store API Snapshot": {
+      "main": [[{"node": "4. Parse Data", "type": "main", "index": 0}]]
+    },
+    "4. Parse Data": {
+      "main": [
+        [{"node": "5. Upsert Event", "type": "main", "index": 0}],
+        [{"node": "6. Upsert Players/Machines", "type": "main", "index": 0}]
+      ]
+    },
+    "6. Upsert Players/Machines": {
+      "main": [[{"node": "7. Filter Higher Scores", "type": "main", "index": 0}]]
+    },
+    "7. Filter Higher Scores": {
+      "main": [[{"node": "8. Insert High Scores", "type": "main", "index": 0}]]
+    },
+    "8. Insert High Scores": {
+      "main": [[{"node": "9. Recalculate Leaderboard", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
