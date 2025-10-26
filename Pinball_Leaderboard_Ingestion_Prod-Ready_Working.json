@@ -1,5 +1,5 @@
 {
-  "name": "Pinball Leaderboard Ingestion (Production Ready)",
+  "name": "Pinball Leaderboard Ingestion (Production)",
   "nodes": [
     {
       "parameters": {
@@ -147,23 +147,6 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{ $json.should_insert }}",
-              "value2": true
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [1340, 420],
-      "name": "Filter New High Scores",
-      "id": "if-node-001"
-    },
-    {
-      "parameters": {
         "operation": "insert",
         "schema": {
           "__rl": true,
@@ -192,7 +175,7 @@
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [1560, 420],
+      "position": [1340, 420],
       "name": "Insert New High Score",
       "id": "postgres-insert-001",
       "credentials": {
@@ -208,7 +191,7 @@
       },
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
-      "position": [1780, 300],
+      "position": [1560, 300],
       "name": "Wait for Both Paths",
       "id": "merge-node-001"
     },
@@ -222,7 +205,7 @@
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [2000, 300],
+      "position": [1780, 300],
       "name": "Recalculate Leaderboard",
       "id": "postgres-recalc-001",
       "credentials": {
@@ -235,19 +218,15 @@
     {
       "parameters": {
         "url": "https://your-frontend-webhook.example.com/api/leaderboard-updated",
-        "options": {
-          "response": {
-            "response": {
-              "responseCode": 200
-            }
-          }
-        }
+        "sendBody": false,
+        "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2220, 300],
+      "position": [2000, 300],
       "name": "Notify Frontend",
-      "id": "http-notify-001"
+      "id": "http-notify-001",
+      "disabled": true
     }
   ],
   "connections": {
@@ -334,17 +313,6 @@
       "main": [
         [
           {
-            "node": "Filter New High Scores",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Filter New High Scores": {
-      "main": [
-        [
-          {
             "node": "Insert New High Score",
             "type": "main",
             "index": 0
@@ -393,10 +361,10 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "production-v2-split",
+  "versionId": "production-v3-final",
   "meta": {
-    "templateCredsSetupCompleted": false,
-    "instanceId": "pinball-leaderboard-prod"
+    "templateCredsSetupCompleted": true,
+    "instanceId": "pinball-leaderboard-production"
   },
   "tags": []
 }
