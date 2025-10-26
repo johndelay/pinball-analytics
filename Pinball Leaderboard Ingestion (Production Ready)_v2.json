@@ -1,0 +1,425 @@
+{
+  "name": "Pinball Leaderboard Ingestion (Production Ready)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ],
+      "name": "Schedule Every 10 Minutes",
+      "id": "schedule-trigger-001"
+    },
+    {
+      "parameters": {
+        "url": "https://api.prd.sternpinball.io/api/v1/portal/leaderboards/?event_code=hJjW-WXu-oCGQ&event_state=current&format=json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        300
+      ],
+      "name": "Fetch Stern API Data",
+      "id": "http-request-001"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Audit & Prepare Data - Extract and structure API response\n\nconst rawResponse = $input.first().json;\nconst fetchedAt = new Date().toISOString();\nconst leaderboard = rawResponse.leaderboard || {};\n\n// Extract metadata\nconst eventCode = leaderboard.code || 'hJjW-WXu-oCGQ';\nconst eventName = leaderboard.name || 'Unknown Event';\nconst startDate = leaderboard.start_date || null;\nconst stopDate = leaderboard.stop_date || null;\n\n// Extract arrays safely\nconst titles = Array.isArray(leaderboard.titles) ? leaderboard.titles : [];\nconst scores = Array.isArray(leaderboard.scores) ? leaderboard.scores : [];\n\n// Create machine code map (title_name -> title_code)\nconst machineMap = {};\ntitles.forEach(title => {\n  machineMap[title.title_name] = title.title_code;\n});\n\n// Flatten and structure scores\nconst structuredScores = scores.map(score => ({\n  player_id: score.username,\n  machine_id: machineMap[score.title_name],\n  high_score: score.score,\n  date_set: fetchedAt,\n  event_code: eventCode,\n  score_source: 'API',\n  is_approved: true,\n  display_name: score.username,\n  initials: score.initials,\n  avatar_url: score.avatar_path,\n  background_color_hex: score.background_color_hex,\n  is_all_access: score.is_all_accesss || false,\n  title_name: score.title_name\n}));\n\n// Output metadata for event upsert\nconst metadata = {\n  event_code: eventCode,\n  event_name: eventName,\n  start_date: startDate,\n  stop_date: stopDate,\n  fetched_at: fetchedAt,\n  raw_response: rawResponse\n};\n\n// N8N REQUIRES items property for multiple outputs\nreturn { \n  outputItems: [\n    [{ json: metadata }],\n    structuredScores.map(s => ({ json: s }))\n  ]\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ],
+      "name": "Parse and Structure Data",
+      "id": "code-node-001"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO Events (\n    event_code, \n    event_name, \n    start_date, \n    stop_date, \n    location_id,\n    event_type\n) VALUES (\n    $1,\n    $2,\n    $3::timestamp,\n    $4::timestamp,\n    '11440',\n    'STERN_LEAGUE'\n)\nON CONFLICT (event_code) \nDO UPDATE SET\n    event_name = EXCLUDED.event_name,\n    start_date = EXCLUDED.start_date,\n    stop_date = EXCLUDED.stop_date,\n    is_active = true;",
+        "options": {
+          "queryReplacement": "={{ [ $json.event_code, $json.event_name, $json.start_date, $json.stop_date ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        900,
+        180
+      ],
+      "name": "Upsert Event Metadata",
+      "id": "postgres-event-001",
+      "credentials": {
+        "postgres": {
+          "id": "cDet4ulNrQr7JVZq",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Upsert Player\nINSERT INTO Players (\n    player_id, \n    display_name, \n    avatar_url,\n    background_color_hex, \n    is_all_access,\n    last_seen\n) VALUES (\n    $1,\n    $2,\n    $3,\n    $4,\n    $5::boolean,\n    NOW()\n)\nON CONFLICT (player_id) \nDO UPDATE SET\n    display_name = EXCLUDED.display_name,\n    avatar_url = EXCLUDED.avatar_url,\n    background_color_hex = EXCLUDED.background_color_hex,\n    is_all_access = EXCLUDED.is_all_access,\n    last_seen = NOW();\n\n-- Upsert Machine\nINSERT INTO Machines (\n    machine_id,\n    machine_name,\n    is_active\n) VALUES (\n    $6,\n    $7,\n    true\n) \nON CONFLICT (machine_id) \nDO UPDATE SET\n    machine_name = EXCLUDED.machine_name,\n    is_active = true;",
+        "options": {
+          "queryReplacement": "={{ [ $json.player_id, $json.display_name, $json.avatar_url, $json.background_color_hex, $json.is_all_access, $json.machine_id, $json.title_name ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        900,
+        420
+      ],
+      "name": "Upsert Players and Machines",
+      "id": "postgres-player-001",
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Check if this score already exists or is lower than existing\nSELECT \n    CASE \n        WHEN MAX(high_score) IS NULL THEN true\n        WHEN MAX(high_score) < $3 THEN true\n        ELSE false\n    END as should_insert,\n    $1 as player_id,\n    $2 as machine_id,\n    $3 as high_score,\n    $4 as date_set,\n    $5 as event_code,\n    $6 as score_source,\n    $7 as is_approved\nFROM High_Scores_Archive\nWHERE player_id = $1\n    AND machine_id = $2\n    AND event_code = $5;",
+        "options": {
+          "queryReplacement": "={{ [ $json.player_id, $json.machine_id, $json.high_score, $json.date_set, $json.event_code, $json.score_source, $json.is_approved ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1120,
+        420
+      ],
+      "name": "Check for Higher Score",
+      "id": "postgres-filter-001",
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.should_insert }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        420
+      ],
+      "name": "Filter New High Scores",
+      "id": "if-node-001"
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "high_scores_archive",
+          "mode": "name",
+          "cachedResultName": "high_scores_archive"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "player_id": "={{ $json.player_id }}",
+            "machine_id": "={{ $json.machine_id }}",
+            "high_score": "={{ $json.high_score }}",
+            "date_set": "={{ $json.date_set }}",
+            "event_code": "={{ $json.event_code }}",
+            "score_source": "={{ $json.score_source }}",
+            "is_approved": "={{ $json.is_approved }}"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1560,
+        420
+      ],
+      "name": "Insert New High Score",
+      "id": "postgres-insert-001",
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1780,
+        300
+      ],
+      "name": "Wait for Both Paths",
+      "id": "merge-node-001"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT update_combined_leaderboard(\n    $1::timestamp,\n    $2::timestamp,\n    $3\n);",
+        "options": {
+          "queryReplacement": "={{ [ $('Parse and Structure Data').first().json.start_date, $('Parse and Structure Data').first().json.stop_date, $('Parse and Structure Data').first().json.event_code ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2000,
+        300
+      ],
+      "name": "Recalculate Leaderboard",
+      "id": "postgres-recalc-001",
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://your-frontend-webhook.example.com/api/leaderboard-updated",
+        "options": {
+          "response": {
+            "response": {
+              "responseCode": 200
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2220,
+        300
+      ],
+      "name": "Notify Frontend",
+      "id": "http-notify-001"
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "api_snapshots",
+          "mode": "name",
+          "cachedResultName": "api_snapshots"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event_code": "={{ $json.event_code }}",
+            "fetched_at": "={{ $json.fetched_at }}",
+            "raw_response": "={{ JSON.stringify($json.raw_response) }}"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        900,
+        60
+      ],
+      "name": "Archive API Snapshot",
+      "id": "postgres-snapshot-001",
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Every 10 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Fetch Stern API Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Stern API Data": {
+      "main": [
+        [
+          {
+            "node": "Parse and Structure Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse and Structure Data": {
+      "main": [
+        [
+          {
+            "node": "Upsert Event Metadata",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Archive API Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Upsert Players and Machines",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Event Metadata": {
+      "main": [
+        [
+          {
+            "node": "Wait for Both Paths",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Players and Machines": {
+      "main": [
+        [
+          {
+            "node": "Check for Higher Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for Higher Score": {
+      "main": [
+        [
+          {
+            "node": "Filter New High Scores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New High Scores": {
+      "main": [
+        [
+          {
+            "node": "Insert New High Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert New High Score": {
+      "main": [
+        [
+          {
+            "node": "Wait for Both Paths",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Wait for Both Paths": {
+      "main": [
+        [
+          {
+            "node": "Recalculate Leaderboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recalculate Leaderboard": {
+      "main": [
+        [
+          {
+            "node": "Notify Frontend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Archive API Snapshot": {
+      "main": [
+        []
+      ]
+    },
+    "Notify Frontend": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "production-v1",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "pinball-leaderboard-prod"
+  },
+  "tags": []
+}
