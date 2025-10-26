@@ -108,9 +108,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "-- Upsert Player\nINSERT INTO Players (\n    player_id, \n    display_name, \n    avatar_url,\n    background_color_hex, \n    is_all_access,\n    last_seen\n) VALUES (\n    $1,\n    $2,\n    $3,\n    $4,\n    $5::boolean,\n    NOW()\n)\nON CONFLICT (player_id) \nDO UPDATE SET\n    display_name = EXCLUDED.display_name,\n    avatar_url = EXCLUDED.avatar_url,\n    background_color_hex = EXCLUDED.background_color_hex,\n    is_all_access = EXCLUDED.is_all_access,\n    last_seen = NOW();\n\n-- Upsert Machine\nINSERT INTO Machines (\n    machine_id,\n    machine_name,\n    is_active\n) VALUES (\n    $6,\n    $7,\n    true\n) \nON CONFLICT (machine_id) \nDO UPDATE SET\n    machine_name = EXCLUDED.machine_name,\n    is_active = true;",
+        "query": "-- Upsert Player\nINSERT INTO Players (\n    player_id, \n    display_name, \n    avatar_url,\n    background_color_hex, \n    is_all_access,\n    last_seen\n) VALUES (\n    $1,\n    $2,\n    $3,\n    $4,\n    $5::boolean,\n    NOW()\n)\nON CONFLICT (player_id) \nDO UPDATE SET\n    display_name = EXCLUDED.display_name,\n    avatar_url = EXCLUDED.avatar_url,\n    background_color_hex = EXCLUDED.background_color_hex,\n    is_all_access = EXCLUDED.is_all_access,\n    last_seen = NOW();\n\n-- Upsert Machine\nINSERT INTO Machines (\n    machine_id,\n    machine_name,\n    is_active\n) VALUES (\n    $6,\n    $7,\n    true\n) \nON CONFLICT (machine_id) \nDO UPDATE SET\n    machine_name = EXCLUDED.machine_name,\n    is_active = true;\n\n-- Return the score data to pass to next node\nSELECT $1 as player_id, $6 as machine_id, $8::bigint as high_score, \n       $9 as date_set, $10 as event_code, 'API' as score_source, true as is_approved;",
         "options": {
-          "queryReplacement": "={{ [ $json.player_id, $json.display_name, $json.avatar_url, $json.background_color_hex, $json.is_all_access, $json.machine_id, $json.title_name ] }}"
+          "queryReplacement": "={{ [ $json.player_id, $json.display_name, $json.avatar_url, $json.background_color_hex, $json.is_all_access, $json.machine_id, $json.title_name, $json.high_score, $json.date_set, $json.event_code ] }}"
         }
       },
       "type": "n8n-nodes-base.postgres",
@@ -128,7 +128,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "-- Check if this score already exists or is lower than existing\nSELECT \n    CASE \n        WHEN MAX(high_score) IS NULL THEN true\n        WHEN MAX(high_score) < $3 THEN true\n        ELSE false\n    END as should_insert,\n    $1 as player_id,\n    $2 as machine_id,\n    $3 as high_score,\n    $4 as date_set,\n    $5 as event_code,\n    $6 as score_source,\n    $7 as is_approved\nFROM High_Scores_Archive\nWHERE player_id = $1\n    AND machine_id = $2\n    AND event_code = $5;",
+        "query": "-- Check if we should insert this score\n-- Returns row only if: (1) no score exists OR (2) new score is higher\nWITH existing AS (\n  SELECT MAX(high_score) as max_score\n  FROM High_Scores_Archive\n  WHERE player_id = $1\n    AND machine_id = $2\n    AND event_code = $5\n)\nSELECT \n  $1 as player_id,\n  $2 as machine_id,\n  $3::bigint as high_score,\n  $4 as date_set,\n  $5 as event_code,\n  $6 as score_source,\n  $7::boolean as is_approved\nFROM existing\nWHERE max_score IS NULL OR $3::bigint > max_score;",
         "options": {
           "queryReplacement": "={{ [ $json.player_id, $json.machine_id, $json.high_score, $json.date_set, $json.event_code, $json.score_source, $json.is_approved ] }}"
         }
@@ -204,9 +204,7 @@
     },
     {
       "parameters": {
-        "mode": "combine",
-        "combinationMode": "mergeByPosition",
-        "options": {}
+        "mode": "append"
       },
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
