@@ -3,6 +3,7 @@ CREATE TABLE Players (
     player_id VARCHAR(100) PRIMARY KEY,
     display_name VARCHAR(100) NOT NULL,
     avatar_url TEXT,
+    background_color_hex VARCHAR(7),
     is_all_access BOOLEAN DEFAULT FALSE,
     last_seen TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
