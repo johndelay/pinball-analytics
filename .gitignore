@@ -1,0 +1,32 @@
+# Environment & Secrets
+   .env
+   .env.*
+   *.env
+   
+   # Credentials
+   credentials.json
+   config/secrets.yaml
+   
+   # N8n specific (if applicable)
+   .n8n/
+   *.credentials.json
+   
+   # Database
+   *.db
+   *.sqlite
+   
+   # Logs
+   *.log
+   logs/
+   
+   # OS Files
+   .DS_Store
+   Thumbs.db
+   
+   # IDE
+   .vscode/
+   .idea/
+   
+   # Node modules (if using)
+   node_modules/
+.claude/
