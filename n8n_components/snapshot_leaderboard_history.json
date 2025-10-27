@@ -1,0 +1,36 @@
+{
+  "name": "Snapshot Leaderboard History",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO Leaderboard_History (player_id, combined_score, current_rank)\nSELECT player_id, combined_score, current_rank\nFROM Leaderboard_Cache;",
+        "options": {}
+      },
+      "id": "snapshot-history-node",
+      "name": "Snapshot to History",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1820,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Pinball Analytics DB"
+        }
+      }
+    }
+  ],
+  "connections": {},
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-10-26T00:00:00.000Z",
+  "versionId": "1"
+}
