@@ -23,7 +23,7 @@ Each PostgreSQL node needs credentials configured:
 1. Click on any **Postgres** node (nodes 3, 5, 6, 7, 8, 9)
 2. In the **Credential to connect with** dropdown, click **Create New**
 3. Enter your credentials:
-   - **Host**: `192.168.86.108` (from your .env file)
+   - **Host**: `192.168.1.5` (from your .env file)
    - **Database**: `pinball`
    - **User**: `postgres`
    - **Password**: (from your .env DB_PASSWORD)
