@@ -98,7 +98,3 @@ The `.env` file (not committed to git) contains:
 - `DB_USER`: PostgreSQL username
 - `DB_PASSWORD`: Database password
 - `DB_HOST`: Database server hostname/IP
-
-## Known Issues
-
-The bootstrap script has a syntax error at line 151 (unterminated quote in the psql command for Phase 2). This needs to be fixed before functions can be deployed.
