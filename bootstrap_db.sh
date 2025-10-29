@@ -155,6 +155,21 @@ for f in database/functions/*.sql; do
     fi
 done
 
+# 3. Run Sequence Repair (A preventative measure to fix issues like the one you just saw)
+echo "--- PHASE 3: Fixing table sequences (to prevent duplicate key errors) ---"
+
+# These commands dynamically find the sequence for each SERIAL column and 
+# force-set the next value to MAX(ID) + 1, or 1 if the table is empty.
+psql -h ${DB_HOST} -d ${DB_NAME} -U ${DB_USER} -c "
+SELECT setval(pg_get_serial_sequence('Api_Snapshots', 'snapshot_id'), COALESCE((SELECT MAX(snapshot_id) FROM Api_Snapshots) + 1, 1), false);
+SELECT setval(pg_get_serial_sequence('High_Scores_Archive', 'score_id'), COALESCE((SELECT MAX(score_id) FROM High_Scores_Archive) + 1, 1), false);
+SELECT setval(pg_get_serial_sequence('Leaderboard_History', 'history_id'), COALESCE((SELECT MAX(history_id) FROM Leaderboard_History) + 1, 1), false);
+"
+if [ $? -ne 0 ]; then
+    echo "ERROR running SEQUENCE REPAIR. Aborting."
+    exit 1
+fi
+
 echo ""
 echo "========================================="
 echo "✅ Database bootstrap completed successfully!"

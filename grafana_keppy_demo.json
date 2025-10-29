@@ -1,0 +1,276 @@
+{
+  "title": "Pinball Leaderboard: Analytics Dashboard",
+  "uid": "pinball-analytics-demo",
+  "description": "Owner and Player-focused visualization for the Pinball Leaderboard system.",
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "your_ds_uid" 
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercent": false,
+        "textMode": "value_and_name"
+      },
+      "pluginVersion": "8.5.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "your_ds_uid"
+          },
+          "format": "table",
+          "rawSql": "SELECT last_successful_run AS \"Last Ingestion Time\",\n       total_runs_today AS \"Runs Today\",\n       runs_last_hour AS \"Runs Last Hour\"\nFROM workflow_health;",
+          "refId": "A"
+        }
+      ],
+      "title": "📊 System Heartbeat (Owner Value)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "your_ds_uid"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercent": false,
+        "textMode": "value_and_name"
+      },
+      "pluginVersion": "8.5.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "your_ds_uid"
+          },
+          "format": "table",
+          "rawSql": "SELECT total_scores AS \"Total High Scores\",\n       total_players AS \"Registered Players\",\n       total_machines AS \"Tracked Machines\"\nFROM Daily_Stats\nWHERE snapshot_date = CURRENT_DATE;",
+          "refId": "A"
+        }
+      ],
+      "title": "📈 Overall Database Statistics (Owner Value)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "your_ds_uid"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [
+            "last"
+          ],
+          "displayMode": "list",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "your_ds_uid"
+          },
+          "format": "time_series",
+          "rawSql": "SELECT\n  recorded_at AS \"time\",\n  current_rank\nFROM Leaderboard_History\nWHERE player_id = '${PlayerName:raw}'\nORDER BY 1;",
+          "refId": "A"
+        }
+      ],
+      "title": "🥇 Player Rank Progression Over Time (Razzle-Dazzle)",
+      "type": "timeseries",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "axisPlacement": "left",
+            "drawStyle": "line",
+            "lineStyle": {
+              "fill": "solid"
+            },
+            "barAlignment": 0,
+            "lineWidth": 2,
+            "pointSize": 5
+          },
+          "unit": "short",
+          "min": 1,
+          "max": 50,
+          "color": {
+            "fixedColor": "green",
+            "mode": "fixed"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 11
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "your_ds_uid"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "id": 4,
+      "options": {
+        "orientation": "horizontal",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "your_ds_uid"
+          },
+          "format": "table",
+          "rawSql": "SELECT\n  m.machine_name AS \"Machine Name\",\n  COUNT(h.score_id) AS \"Total High Scores Recorded\"\nFROM High_Scores_Archive h\nJOIN Machines m ON h.machine_id = m.machine_id\nGROUP BY 1\nORDER BY 2 DESC\nLIMIT 10;",
+          "refId": "A"
+        }
+      ],
+      "title": "🎮 Top 10 Machine Popularity (Owner Value - Plays/Revenue)",
+      "type": "barchart",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisPlacement": "auto",
+            "axisSoftMin": 0,
+            "barAlignment": 0,
+            "fillOpacity": 80,
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineStyle": "solid",
+            "lineWidth": 1,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": "none",
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    }
+  ],
+  "schemaVersion": 36,
+  "style": "dark",
+  "tags": [
+    "pinball",
+    "leaderboard",
+    "analytics"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "your_ds_uid"
+        },
+        "definition": "SELECT player_id, display_name FROM Players ORDER BY display_name",
+        "description": "Select a player to view their rank history.",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Player",
+        "multi": false,
+        "name": "PlayerName",
+        "options": [],
+        "query": {
+          "query": "SELECT player_id, display_name FROM Players ORDER BY display_name",
+          "refId": "PlayerName"
+        },
+        "refresh": 1,
+        "regex": "/^([A-Za-z0-9_]{3,})$/",
+        "skipUrlSync": false,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "weekStart": ""
+}
