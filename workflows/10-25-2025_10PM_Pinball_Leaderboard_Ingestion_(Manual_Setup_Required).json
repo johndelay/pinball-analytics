@@ -1,0 +1,301 @@
+{
+  "name": "Pinball Leaderboard Ingestion (Fixed)",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -1056,
+        368
+      ],
+      "name": "1. Schedule Trigger (Every 10 Mins)",
+      "id": "7d808b99-634e-4ff6-bce4-4e90a53f083d"
+    },
+    {
+      "parameters": {
+        "url": "https://api.prd.sternpinball.io/api/v1/portal/leaderboards/?event_code=hJjW-WXu-oCGQ&event_state=current&format=json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -864,
+        368
+      ],
+      "name": "2. Fetch Data (Stern API) - SET URL",
+      "id": "256b3fda-7660-4019-a247-679edc99af26"
+    },
+    {
+      "parameters": {
+        "functionCode": "// --- Node 3: Audit & Prepare Data ---\n\n// Access the input item directly from the items array provided by n8n.\nconst rawResponse = items[0].json; \nconst fetchedAt = new Date().toISOString();\nconst leaderboard = rawResponse.leaderboard; \n\n// --- 1. Prepare Metadata (Defensive Checks) ---\nconst eventCode = leaderboard && leaderboard.code ? leaderboard.code : 'hJjW-WXu-oCGQ';\nconst eventName = leaderboard && leaderboard.name ? leaderboard.name : 'Unknown Event';\nconst startDate = leaderboard ? leaderboard.start_date : null;\nconst stopDate = leaderboard ? leaderboard.stop_date : null;\n\n// Use an empty array if .titles or .scores are missing\nconst titles = leaderboard && Array.isArray(leaderboard.titles) ? leaderboard.titles : [];\nconst scores = leaderboard && Array.isArray(leaderboard.scores) ? leaderboard.scores : [];\n\n// --- 2. Create Machine Code Map ---\n// Maps title_name (\"Batman '66\") to title_code (\"BAT\")\nconst machineMap = titles.reduce((acc, title) => {\n  acc[title.title_name] = title.title_code;\n  return acc;\n}, {});\n\n// --- 3. Flatten and Structure Scores ---\nconst structuredScores = scores.map(score => {\n  const machineId = machineMap[score.title_name];\n\n  return {\n    // --- Data for UPSERT & INSERT ---\n    player_id: score.username,\n    machine_id: machineId, // Mapped short code\n    high_score: score.score,\n    date_set: fetchedAt, // API lacks timestamp, use ingestion time\n    event_code: eventCode,\n    score_source: 'API',\n    is_approved: true,\n    \n    // --- Player Data for UPSERT in Node 5 ---\n    display_name: score.username,\n    initials: score.initials,\n    avatar_url: score.avatar_path,\n    background_color_hex: score.background_color_hex,\n    is_all_access: score.is_all_accesss \n  };\n});\n\n// Output 0 (Metadata): For Node 4 (Event) and Node 8 (Recalculate)\nconst outputMetadata = { \n    json: { \n        event_code: eventCode, \n        event_name: eventName,\n        start_date: startDate, \n        stop_date: stopDate, \n        raw_response: rawResponse, \n        fetched_at: fetchedAt \n    } \n};\n\n// Output 1 (Scores): For Node 5, 6, 7 (UPSERT/Filter/Insert)\nconst outputScores = structuredScores.map(score => ({ json: score }));\n\n// MUST RETURN AN ARRAY OF ARRAYS TO USE MULTIPLE OUTPUTS\nreturn [\n    [outputMetadata],   // Output 0 (Single item for Metadata path)\n    outputScores        // Output 1 (List of items for Scores path)\n];"
+      },
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -656,
+        368
+      ],
+      "name": "3. Audit & Prepare Data (JS Logic)",
+      "id": "5fe44d2b-be0e-468c-bb5d-84f8dab47918",
+      "alwaysOutputData": true,
+      "maxNumOutputs": 2
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO Events (\n    event_code, \n    event_name, \n    start_date, \n    stop_date, \n    location_id\n) VALUES (\n    $1, -- event_code\n    $2, -- event_name\n    $3, -- start_date\n    $4, -- stop_date\n    '11440' -- MAQ Location ID\n)\nON CONFLICT (event_code) \nDO UPDATE SET\n    event_name = $2,\n    start_date = $3,\n    stop_date = $4;",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "=[ \"{{ $json.event_code }}\", \"{{ $json.event_name }}\", \"{{ $json.start_date }}\", \"{{ $json.stop_date }}\" ]",
+          "replaceEmptyStrings": true
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -432,
+        208
+      ],
+      "id": "81a2f8cb-42a3-49cd-b334-a9ce533cd194",
+      "name": "4. Event Validation (Postgres Query)",
+      "credentials": {
+        "postgres": {
+          "id": "cDet4ulNrQr7JVZq",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- UPSERT Player and Update last_seen\nINSERT INTO Players (\n    player_id, \n    display_name, \n    avatar_url,\n    background_color_hex, \n    is_all_access\n) VALUES (\n    \"{{ $json.player_id }}\", \n    \"{{ $json.display_name }}\", \n    \"{{ $json.avatar_url }}\",\n    \"{{ $json.background_color_hex }}\",\n    \"{{ $json.is_all_access }}\"\n)\nON CONFLICT (player_id) DO UPDATE SET\n    last_seen = NOW(); -- Track player activity regardless of score\n    \n-- UPSERT Machine (Run once per machine code in the list)\nINSERT INTO Machines (\n    machine_id,\n    machine_name\n) VALUES (\n    \"{{ $json.machine_id }}\",\n    \"{{ $json.title_name }}\" -- Assuming title_name can be derived in Node 3\n) \nON CONFLICT (machine_id) DO NOTHING;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -208,
+        368
+      ],
+      "id": "0aa75ab6-f8ba-4313-9b6d-71e6217ab2bc",
+      "name": "5: Player/Machine UPSERT (Postgres Query)",
+      "credentials": {
+        "postgres": {
+          "id": "cDet4ulNrQr7JVZq",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// --- Node 6: Smart Filtering Logic ---\n\n// This node requires two connected PostgreSQL nodes (not shown in this JSON) \n// to query the High_Scores_Archive table, find the existing max score \n// for the current player/machine/event, and pass the item only if \n// current_score > max_archived_score. \n\n// Due to n8n's asynchronous nature, this logic should preferably be done \n// using a dedicated Postgres node to perform the SELECT/IF logic, \n// or a sub-query inside the INSERT node (Node 7).\n\n// For a simple, single-node implementation (less robust):\n// if ($json.high_score > global_max_score_query) return $items;\n\n// For this fixed n8n JSON, we will assume this node is now a \n// filter on a temporary variable set by an upstream DB query.\n\nreturn items;"
+      },
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        0,
+        368
+      ],
+      "name": "6. Smart Filtering (JS Logic)",
+      "id": "c31a122a-536d-4725-b43f-03c4f8404e05"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "High_Scores_Archive",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "player_id": "={{ $json.player_id }}",
+            "machine_id": "={{ $json.machine_id }}",
+            "high_score": "={{ $json.high_score }}",
+            "date_set": "={{ $json.date_set }}",
+            "event_code": "={{ $json.event_code }}",
+            "score_source": "={{ $json.score_source }}",
+            "is_approved": "={{ $json.is_approved }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "queryBatching": "independently",
+          "replaceEmptyStrings": true
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        368
+      ],
+      "id": "11a00fc6-5252-4408-b871-619edcc565f4",
+      "name": "7. Score Ingestion (High_Scores_Archive)",
+      "credentials": {
+        "postgres": {
+          "id": "cDet4ulNrQr7JVZq",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT update_combined_leaderboard(\n    '{{ $('4. Event Validation (Postgres Query)').first().json.start_date }}'::timestamp,\n    '{{ $('4. Event Validation (Postgres Query)').first().json.stop_date }}'::timestamp,\n    '{{ $('4. Event Validation (Postgres Query)').first().json.event_code }}'\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        480,
+        368
+      ],
+      "id": "8. Recalculate Combined Leaderboard (Postgres)",
+      "name": "8. Recalculate Combined Leaderboard (Postgres)",
+      "credentials": {
+        "postgres": {
+          "id": "cDet4ulNrQr7JVZq",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "YOUR_FRONTEND_WEBHOOK_URL_HERE",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        752,
+        368
+      ],
+      "name": "9. Frontend Trigger / API Publish",
+      "id": "5ab91c4b-175f-43a0-bd7d-e51a520cf16c"
+    }
+  ],
+  "connections": {
+    "1. Schedule Trigger (Every 10 Mins)": {
+      "main": [
+        [
+          {
+            "node": "2. Fetch Data (Stern API) - SET URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Fetch Data (Stern API) - SET URL": {
+      "main": [
+        [
+          {
+            "node": "3. Audit & Prepare Data (JS Logic)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Audit & Prepare Data (JS Logic)": {
+      "main": [
+        [
+          {
+            "node": "4. Event Validation (Postgres Query)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "5: Player/Machine UPSERT (Postgres Query)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Event Validation (Postgres Query)": {
+      "main": [
+        [
+          {
+            "node": "8. Recalculate Combined Leaderboard (Postgres)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5: Player/Machine UPSERT (Postgres Query)": {
+      "main": [
+        [
+          {
+            "node": "6. Smart Filtering (JS Logic)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6. Smart Filtering (JS Logic)": {
+      "main": [
+        [
+          {
+            "node": "7. Score Ingestion (High_Scores_Archive)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7. Score Ingestion (High_Scores_Archive)": {
+      "main": [
+        [
+          {
+            "node": "8. Recalculate Combined Leaderboard (Postgres)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8. Recalculate Combined Leaderboard (Postgres)": {
+      "main": [
+        [
+          {
+            "node": "9. Frontend Trigger / API Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "02058862-455f-40ee-9dd0-a91e0cc4c29a",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

@@ -14,9 +14,12 @@
       },
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [240, 300],
+      "position": [
+        0,
+        0
+      ],
       "name": "Daily at 8 AM",
-      "id": "schedule-email-001"
+      "id": "77b249b2-0402-48dc-bd7c-42ed0c69a28a"
     },
     {
       "parameters": {
@@ -26,9 +29,12 @@
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [460, 300],
+      "position": [
+        224,
+        0
+      ],
       "name": "Get Database Stats",
-      "id": "postgres-stats-001",
+      "id": "47200372-e59e-4995-b8ae-5f780a6bc1ae",
       "credentials": {
         "postgres": {
           "id": "cDet4ulNrQr7JVZq",
@@ -44,9 +50,12 @@
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [680, 300],
+      "position": [
+        448,
+        0
+      ],
       "name": "Get Top 5 Players",
-      "id": "postgres-top5-001",
+      "id": "b2f4b7e5-1814-41e2-b9b2-38b5e9f007e3",
       "credentials": {
         "postgres": {
           "id": "cDet4ulNrQr7JVZq",
@@ -60,26 +69,32 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [900, 300],
+      "position": [
+        672,
+        0
+      ],
       "name": "Build Email HTML",
-      "id": "code-email-001"
+      "id": "bd447028-c3f5-471f-89e0-96fba8625043"
     },
     {
       "parameters": {
         "sendTo": "your-email@gmail.com",
         "subject": "={{ $json.subject }}",
-        "emailType": "html",
         "message": "={{ $json.html }}",
         "options": {}
       },
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
-      "position": [1120, 300],
+      "position": [
+        880,
+        0
+      ],
       "name": "Send Gmail",
-      "id": "gmail-send-001",
+      "id": "54c5b48d-16bd-4f64-91ff-efa2d38d00b3",
+      "webhookId": "c037f06e-6d61-49cc-b4d3-d69dc301ab6e",
       "credentials": {
         "gmailOAuth2": {
-          "id": "YOUR_GMAIL_OAUTH2_CREDENTIAL_ID",
+          "id": "OF6yDXch5kgNOSlx",
           "name": "Gmail account"
         }
       }
@@ -94,9 +109,12 @@
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [1120, 420],
+      "position": [
+        880,
+        128
+      ],
       "name": "Record Daily Stats",
-      "id": "postgres-record-001",
+      "id": "f91211bd-84bb-430e-9f4e-3b411dd6f618",
       "credentials": {
         "postgres": {
           "id": "cDet4ulNrQr7JVZq",
@@ -105,6 +123,63 @@
       }
     }
   ],
+  "pinData": {
+    "Get Top 5 Players": [
+      {
+        "json": {
+          "display_name": "goofygoober",
+          "combined_score": 1130,
+          "current_rank": 1
+        }
+      },
+      {
+        "json": {
+          "display_name": "Gamer_Mike",
+          "combined_score": 950,
+          "current_rank": 2
+        }
+      },
+      {
+        "json": {
+          "display_name": "TomtheBOMB",
+          "combined_score": 878,
+          "current_rank": 3
+        }
+      },
+      {
+        "json": {
+          "display_name": "Pzlman5000",
+          "combined_score": 877,
+          "current_rank": 4
+        }
+      },
+      {
+        "json": {
+          "display_name": "SpinnyLinny",
+          "combined_score": 867,
+          "current_rank": 5
+        }
+      }
+    ],
+    "Build Email HTML": [
+      {
+        "json": {
+          "subject": "🎮 Pinball Leaderboard Daily Summary - Wednesday, October 29, 2025",
+          "html": "\n<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"UTF-8\">\n  <style>\n    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }\n    .container { max-width: 600px; margin: 0 auto; padding: 20px; }\n    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; }\n    .stat-box { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #667eea; }\n    .stat-label { font-size: 12px; color: #666; text-transform: uppercase; }\n    .stat-value { font-size: 28px; font-weight: bold; color: #333; }\n    table { width: 100%; border-collapse: collapse; margin: 15px 0; }\n    th { background: #667eea; color: white; padding: 10px; text-align: left; }\n    .footer { text-align: center; color: #999; font-size: 12px; margin-top: 30px; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>🎮 Pinball Leaderboard Report</h1>\n      <p>Wednesday, October 29, 2025</p>\n    </div>\n    \n    <h2>📊 Database Statistics</h2>\n    \n    <div class=\"stat-box\">\n      <div class=\"stat-label\">Total High Scores</div>\n      <div class=\"stat-value\">614</div>\n    </div>\n    \n    <div class=\"stat-box\">\n      <div class=\"stat-label\">Registered Players</div>\n      <div class=\"stat-value\">108</div>\n    </div>\n    \n    <div class=\"stat-box\">\n      <div class=\"stat-label\">Tracked Machines</div>\n      <div class=\"stat-value\">12</div>\n    </div>\n    \n    <div class=\"stat-box\">\n      <div class=\"stat-label\">Today's Activity</div>\n      <div class=\"stat-value\">⚪ No new scores</div>\n      \n    </div>\n    \n    <h2>🏆 Current Top 5 - MAW Oct Leaderboard</h2>\n    <table>\n      <thead>\n        <tr>\n          <th>Rank</th>\n          <th>Player</th>\n          <th style=\"text-align: right;\">Score</th>\n        </tr>\n      </thead>\n      <tbody>\n        \n      <tr>\n        <td style=\"padding: 8px; border-bottom: 1px solid #ddd;\">🥇</td>\n        <td style=\"padding: 8px; border-bottom: 1px solid #ddd;\">goofygoober</td>\n        <td style=\"padding: 8px; border-bottom: 1px solid #ddd; text-align: right;\">1,130</td>\n      </tr>\n    \n      <tr>\n        <td style=\"padding: 8px; border-bottom: 1px solid #ddd;\">🥈</td>\n        <td style=\"padding: 8px; border-bottom: 1px solid #ddd;\">Gamer_Mike</td>\n        <td style=\"padding: 8px; border-bottom: 1px solid #ddd; text-align: right;\">950</td>\n      </tr>\n    \n      <tr>\n        <td style=\"padding: 8px; border-bottom: 1px solid #ddd;\">🥉</td>\n        <td style=\"padding: 8px; border-bottom: 1px solid #ddd;\">TomtheBOMB</td>\n        <td style=\"padding: 8px; border-bottom: 1px solid #ddd; text-align: right;\">878</td>\n      </tr>\n    \n      <tr>\n        <td style=\"padding: 8px; border-bottom: 1px solid #ddd;\">4.</td>\n        <td style=\"padding: 8px; border-bottom: 1px solid #ddd;\">Pzlman5000</td>\n        <td style=\"padding: 8px; border-bottom: 1px solid #ddd; text-align: right;\">877</td>\n      </tr>\n    \n      <tr>\n        <td style=\"padding: 8px; border-bottom: 1px solid #ddd;\">5.</td>\n        <td style=\"padding: 8px; border-bottom: 1px solid #ddd;\">SpinnyLinny</td>\n        <td style=\"padding: 8px; border-bottom: 1px solid #ddd; text-align: right;\">867</td>\n      </tr>\n    \n      </tbody>\n    </table>\n    \n    <div class=\"footer\">\n      <p>Pinball Analytics System | Automated Daily Report</p>\n      <p>Data last updated: 10/29/2025, 1:06:03 AM</p>\n    </div>\n  </div>\n</body>\n</html>\n",
+          "stats": {
+            "total_scores": "614",
+            "total_players": "108",
+            "total_machines": "12",
+            "scores_added_today": "0",
+            "active_players_today": "0",
+            "current_event": "MAW Oct Leaderboard",
+            "players_on_leaderboard": "108",
+            "report_date": "2025-10-29T00:00:00.000Z"
+          }
+        }
+      }
+    ]
+  },
   "connections": {
     "Daily at 8 AM": {
       "main": [
@@ -154,21 +229,17 @@
           }
         ]
       ]
-    },
-    "Send Gmail": {
-      "main": [[]]
-    },
-    "Record Daily Stats": {
-      "main": [[]]
     }
   },
   "active": false,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "email-summary-v1",
+  "versionId": "8f4fbf86-6ec9-4a17-a523-4c1d0a18a3fe",
   "meta": {
-    "templateCredsSetupCompleted": false
+    "templateCredsSetupCompleted": true,
+    "instanceId": "100235c335eb882bd7dc4dc3e300e2d9d5c5fc73acdec7489046f5d3aa6adf7f"
   },
+  "id": "MRqhgrqwLmttNiLB",
   "tags": []
 }

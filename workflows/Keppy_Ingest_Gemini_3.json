@@ -1,0 +1,281 @@
+{
+  "name": "Pinball Leaderboard Ingestion (Manual Setup Required)",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyMinute",
+              "value": 10
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        250,
+        -100
+      ],
+      "name": "1. Schedule Trigger (Every 10 Mins)"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        -180
+      ],
+      "name": "1A. Manual Trigger (Run Now)"
+    },
+    {
+      "parameters": {
+        "url": "https://api.prd.sternpinball.io/api/v1/portal/leaderboards/?event_code=hJjW-WXu-oCGQ&event_state=current&format=json"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        450,
+        -100
+      ],
+      "name": "2. Fetch Data (Stern API) - SET URL"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Your full JavaScript logic goes here."
+      },
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        650,
+        -100
+      ],
+      "name": "3. Audit & Prepare Data (JS Logic)"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1.1,
+      "position": [
+        850,
+        -20
+      ],
+      "name": "4. Event Validation (Postgres Query)"
+    },
+    {
+      "parameters": {
+        "conditions": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1050,
+        -20
+      ],
+      "name": "4. Check If Event Exists (If Node)"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1.1,
+      "position": [
+        1250,
+        -100
+      ],
+      "name": "5. Player/Machine UPSERT (Postgres Query)"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Smart Filtering Logic goes here."
+      },
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1450,
+        -100
+      ],
+      "name": "6. Smart Filtering (JS Logic)"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1.1,
+      "position": [
+        1650,
+        -100
+      ],
+      "name": "7. Score Ingestion (Postgres Insert)"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1.1,
+      "position": [
+        1850,
+        -100
+      ],
+      "name": "8. Recalculate (Postgres Function)"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "url": "YOUR_FRONTEND_WEBHOOK_URL_HERE"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        2050,
+        -100
+      ],
+      "name": "9. Frontend Trigger / API Publish"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1050,
+        100
+      ],
+      "name": "4A. New Event: Human in the Middle (HITM)"
+    }
+  ],
+  "connections": {
+    "1. Schedule Trigger (Every 10 Mins)": {
+      "main": [
+        [
+          {
+            "node": "2. Fetch Data (Stern API) - SET URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1A. Manual Trigger (Run Now)": {
+      "main": [
+        [
+          {
+            "node": "2. Fetch Data (Stern API) - SET URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Fetch Data (Stern API) - SET URL": {
+      "main": [
+        [
+          {
+            "node": "3. Audit & Prepare Data (JS Logic)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Audit & Prepare Data (JS Logic)": {
+      "main": [
+        [
+          {
+            "node": "4. Event Validation (Postgres Query)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "5. Player/Machine UPSERT (Postgres Query)",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "4. Event Validation (Postgres Query)": {
+      "main": [
+        [
+          {
+            "node": "4. Check If Event Exists (If Node)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Check If Event Exists (If Node)": {
+      "main": [
+        [
+          {
+            "node": "5. Player/Machine UPSERT (Postgres Query)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "4A. New Event: Human in the Middle (HITM)",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "5. Player/Machine UPSERT (Postgres Query)": {
+      "main": [
+        [
+          {
+            "node": "6. Smart Filtering (JS Logic)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6. Smart Filtering (JS Logic)": {
+      "main": [
+        [
+          {
+            "node": "7. Score Ingestion (Postgres Insert)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7. Score Ingestion (Postgres Insert)": {
+      "main": [
+        [
+          {
+            "node": "8. Recalculate (Postgres Function)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8. Recalculate (Postgres Function)": {
+      "main": [
+        [
+          {
+            "node": "9. Frontend Trigger / API Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "a4b49ef0-e2e4-46fe-8e14-eb206f597312",
+  "meta": {
+    "instanceId": "100235c335eb882bd7dc4dc3e300e2d9d5c5fc73acdec7489046f5d3aa6adf7f"
+  },
+  "id": "NtQN3zvhsYw9Bgej",
+  "tags": []
+}
