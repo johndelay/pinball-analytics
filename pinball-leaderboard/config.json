@@ -1,0 +1,18 @@
+{
+  "bar_name": "The Delay Pinball League",
+  "logo_url": "https://via.placeholder.com/300x100/1a1a2e/eee?text=YOUR+LOGO+HERE",
+  "theme": {
+    "primary_color": "#ff6b35",
+    "secondary_color": "#f7931e",
+    "background_color": "#1a1a2e",
+    "text_color": "#ffffff",
+    "accent_color": "#00d9ff"
+  },
+  "display": {
+    "scene_duration": 60,
+    "transition_speed": 800
+  },
+  "api": {
+    "refresh_interval": 300000
+  }
+}

@@ -1,0 +1,528 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --primary-color: #ff6b35;
+    --secondary-color: #f7931e;
+    --background-color: #1a1a2e;
+    --text-color: #ffffff;
+    --accent-color: #00d9ff;
+    --card-bg: #16213e;
+    --success-color: #00ff88;
+    --warning-color: #ff3366;
+}
+
+body {
+    font-family: 'Roboto', sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: var(--text-color);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* Header */
+header {
+    background: linear-gradient(180deg, rgba(22, 33, 62, 0.95) 0%, rgba(22, 33, 62, 0.8) 100%);
+    padding: 20px;
+    text-align: center;
+    border-bottom: 3px solid var(--primary-color);
+    box-shadow: 0 4px 20px rgba(255, 107, 53, 0.3);
+    position: relative;
+}
+
+#logo {
+    max-width: 250px;
+    max-height: 80px;
+    margin-bottom: 10px;
+    filter: drop-shadow(0 0 10px rgba(255, 107, 53, 0.5));
+}
+
+h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 2.2rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color), var(--accent-color));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: 3px;
+    text-shadow: 0 0 20px rgba(255, 107, 53, 0.5);
+    animation: glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+    from {
+        filter: drop-shadow(0 0 5px rgba(255, 107, 53, 0.5));
+    }
+    to {
+        filter: drop-shadow(0 0 15px rgba(255, 107, 53, 0.8));
+    }
+}
+
+#lastUpdated {
+    font-size: 0.9rem;
+    color: #888;
+    margin-top: 8px;
+}
+
+/* Main Scene Container */
+main {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    padding: 20px;
+}
+
+.scene {
+    display: none;
+    opacity: 0;
+    animation: fadeIn 0.8s ease-in-out forwards;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.scene.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    to {
+        opacity: 1;
+    }
+}
+
+.scene-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.8rem;
+    text-align: center;
+    margin-bottom: 25px;
+    color: var(--primary-color);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-shadow: 0 0 10px rgba(255, 107, 53, 0.6);
+}
+
+/* Top 10 Scene */
+.leaderboard-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.player-card {
+    background: linear-gradient(135deg, var(--card-bg) 0%, rgba(22, 33, 62, 0.6) 100%);
+    border-radius: 12px;
+    padding: 18px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    border: 2px solid transparent;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.player-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 107, 53, 0.1), transparent);
+    transform: translateX(-100%);
+    animation: shimmer 3s infinite;
+}
+
+@keyframes shimmer {
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+.player-card.top-3 {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 20px rgba(255, 107, 53, 0.4);
+}
+
+.rank-badge {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 2rem;
+    font-weight: 900;
+    min-width: 60px;
+    text-align: center;
+    color: var(--accent-color);
+}
+
+.rank-badge.gold {
+    background: linear-gradient(135deg, #ffd700, #ffed4e);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.8));
+}
+
+.rank-badge.silver {
+    background: linear-gradient(135deg, #c0c0c0, #e8e8e8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.rank-badge.bronze {
+    background: linear-gradient(135deg, #cd7f32, #e8a87c);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.player-info {
+    flex: 1;
+}
+
+.player-name {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 5px;
+}
+
+.player-stats {
+    display: flex;
+    gap: 20px;
+    font-size: 0.9rem;
+    color: #aaa;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.trend-indicator {
+    font-size: 1.5rem;
+    margin-left: auto;
+}
+
+.trend-up {
+    color: var(--success-color);
+    animation: bounce 1s ease-in-out infinite;
+}
+
+.trend-down {
+    color: var(--warning-color);
+    animation: bounce 1s ease-in-out infinite reverse;
+}
+
+@keyframes bounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-5px);
+    }
+}
+
+/* Game Champions Scene */
+.champions-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 15px;
+}
+
+.champion-card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 20px;
+    border-left: 4px solid var(--secondary-color);
+    transition: transform 0.3s ease;
+}
+
+.champion-card:hover {
+    transform: translateX(5px);
+}
+
+.game-name {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--secondary-color);
+    margin-bottom: 10px;
+}
+
+.champion-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.champion-name {
+    font-size: 1.4rem;
+    font-family: 'Orbitron', sans-serif;
+    color: var(--accent-color);
+}
+
+.champion-score {
+    font-size: 1.1rem;
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+/* Recent Activity Scene */
+.activity-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.activity-item {
+    background: var(--card-bg);
+    border-radius: 10px;
+    padding: 15px;
+    border-left: 3px solid var(--accent-color);
+    animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.activity-item.personal-best {
+    border-left-color: var(--success-color);
+    background: linear-gradient(90deg, rgba(0, 255, 136, 0.1), var(--card-bg));
+}
+
+.activity-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.activity-player {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--primary-color);
+}
+
+.activity-time {
+    font-size: 0.85rem;
+    color: #888;
+}
+
+.activity-game {
+    color: #aaa;
+    margin-bottom: 5px;
+}
+
+.activity-score {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--accent-color);
+}
+
+.pb-badge {
+    display: inline-block;
+    background: var(--success-color);
+    color: #000;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-left: 10px;
+}
+
+/* Full Roster Scene */
+.full-roster {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: calc(100vh - 300px);
+    overflow-y: auto;
+}
+
+.roster-item {
+    background: var(--card-bg);
+    padding: 12px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.roster-rank {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    min-width: 50px;
+    color: var(--primary-color);
+}
+
+.roster-name {
+    flex: 1;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.roster-score {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1rem;
+    color: var(--accent-color);
+}
+
+/* Statistics Scene */
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+}
+
+.stat-card {
+    background: var(--card-bg);
+    border-radius: 15px;
+    padding: 25px;
+    text-align: center;
+    border: 2px solid var(--primary-color);
+    box-shadow: 0 4px 15px rgba(255, 107, 53, 0.2);
+}
+
+.stat-value {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 3rem;
+    font-weight: 900;
+    color: var(--primary-color);
+    margin-bottom: 10px;
+}
+
+.stat-label {
+    font-size: 1.1rem;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Controls Footer */
+footer {
+    background: linear-gradient(0deg, rgba(22, 33, 62, 0.95) 0%, rgba(22, 33, 62, 0.8) 100%);
+    padding: 20px;
+    border-top: 3px solid var(--primary-color);
+    box-shadow: 0 -4px 20px rgba(255, 107, 53, 0.3);
+}
+
+.control-group {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.control-btn {
+    font-family: 'Orbitron', sans-serif;
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
+}
+
+.control-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 107, 53, 0.5);
+}
+
+.control-btn:active {
+    transform: translateY(0);
+}
+
+.scene-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.95rem;
+    color: #aaa;
+}
+
+.timer-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#countdown {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--accent-color);
+}
+
+.timer-bar {
+    width: 100px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+#timerProgress {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-color), var(--primary-color));
+    width: 100%;
+    transition: width 1s linear;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--secondary-color);
+}
+
+/* Responsive adjustments for very tall screens */
+@media (min-height: 1400px) {
+    .scene-title {
+        font-size: 2.2rem;
+    }
+    
+    .player-card {
+        padding: 22px;
+    }
+    
+    .player-name {
+        font-size: 1.6rem;
+    }
+}

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pinball Leaderboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- Header with Logo -->
+        <header>
+            <img id="logo" src="" alt="Bar Logo">
+            <h1 id="barName">Pinball Leaderboard</h1>
+            <div id="lastUpdated">Last updated: <span id="updateTime">--:--</span></div>
+        </header>
+
+        <!-- Main Scene Container -->
+        <main id="sceneContainer">
+            <!-- Scene 1: Top 10 -->
+            <div class="scene" id="scene-top10">
+                <h2 class="scene-title">🏆 Top 10 Champions</h2>
+                <div class="leaderboard-list" id="top10List">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Scene 2: Game Champions -->
+            <div class="scene" id="scene-champions">
+                <h2 class="scene-title">🎮 Game Champions</h2>
+                <div class="champions-grid" id="championsList">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Scene 3: Recent Activity -->
+            <div class="scene" id="scene-activity">
+                <h2 class="scene-title">⚡ Recent Plays</h2>
+                <div class="activity-feed" id="activityFeed">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Scene 4: Full Roster -->
+            <div class="scene" id="scene-roster">
+                <h2 class="scene-title">📊 Complete Rankings</h2>
+                <div class="full-roster" id="fullRoster">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Scene 5: Statistics -->
+            <div class="scene" id="scene-stats">
+                <h2 class="scene-title">📈 League Statistics</h2>
+                <div class="stats-grid" id="statsGrid">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+        </main>
+
+        <!-- Kiosk Controls -->
+        <footer id="controls">
+            <div class="control-group">
+                <button id="prevBtn" class="control-btn">◀ Previous</button>
+                <button id="pauseBtn" class="control-btn">⏸ Pause</button>
+                <button id="nextBtn" class="control-btn">Next ▶</button>
+            </div>
+            <div class="scene-info">
+                <span id="sceneIndicator">Scene 1 of 5</span>
+                <div class="timer-container">
+                    <span id="timerText">Next in: </span>
+                    <span id="countdown">60</span>s
+                    <div class="timer-bar">
+                        <div id="timerProgress"></div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

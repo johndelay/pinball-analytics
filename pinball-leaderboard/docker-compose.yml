@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  pinball-leaderboard:
+    build: .
+    container_name: pinball-leaderboard
+    ports:
+      - "5050:5050"
+    volumes:
+      - ./config.json:/app/config.json
+    environment:
+      - FLASK_ENV=production
+    restart: unless-stopped
+    networks:
+      - pinball-network
+
+networks:
+  pinball-network:
+    driver: bridge
