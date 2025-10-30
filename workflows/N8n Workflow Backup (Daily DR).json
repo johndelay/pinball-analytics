@@ -1,0 +1,561 @@
+{
+  "name": "N8n Workflow Backup (Daily DR) - v6 LOOP",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 2 * * *"
+            }
+          ]
+        }
+      },
+      "id": "82ee3d01-a90d-4d35-a436-d0db1b269b16",
+      "name": "Schedule Daily 2 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -4128,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://atom.thedelay.org/api/v1/workflows?active=true",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-API-KEY",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4ZmQ4ODkxNi03YmQ2LTQ3Y2ItYWM3Ny0yZmZiZGEwMjllZjAiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzYxNzA2MTY2fQ.EjwddXxczzmmknGagW0_WG-s5mFX_mEFrsXok9MK5t0"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "71069cd5-c263-4529-9ce1-7e8885a6977c",
+      "name": "Get Active Workflows",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -3904,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "backup-timestamp",
+              "name": "backupTimestamp",
+              "value": "={{ $now.format('yyyy-MM-dd_HHmmss') }}",
+              "type": "string"
+            },
+            {
+              "id": "workflow-count",
+              "name": "workflowCount",
+              "value": "={{ $json.data.length }}",
+              "type": "number"
+            },
+            {
+              "id": "workflows-array",
+              "name": "workflowsArray",
+              "value": "={{ $json.data }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "298641de-5c7d-4d37-9cbb-d092b68611e0",
+      "name": "Set Backup Metadata",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -3680,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "command": "=mkdir -p \"/home/node/.n8n/backups/workflows/{{ $json.backupTimestamp }}\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -3456,
+        704
+      ],
+      "id": "572efce1-f30c-413c-89a2-3a64589b6d20",
+      "name": "Create Backup Directory",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reference Set Backup Metadata directly\nconst metadata = $('Set Backup Metadata').item.json;\nconst workflows = metadata.workflowsArray;\n\nreturn workflows.map(workflow => ({\n  json: {\n    workflow: workflow,\n    backupTimestamp: metadata.backupTimestamp,\n    totalWorkflows: metadata.workflowCount\n  }\n}));"
+      },
+      "id": "891e10a9-2fb4-4860-bc85-8d291d06598e",
+      "name": "Split Workflows for Processing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3248,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process ALL items from the split\nconst items = $input.all();\n\nreturn items.map(item => {\n  const workflow = item.json.workflow;\n  return {\n    json: {\n      workflowId: workflow.id,\n      workflowName: workflow.name,\n      workflowActive: workflow.active,\n      backupTimestamp: item.json.backupTimestamp\n    }\n  };\n});"
+      },
+      "id": "445cddbe-54fa-4085-9fee-76d4fdccf76a",
+      "name": "Get Current Workflow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3024,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://atom.thedelay.org/api/v1/workflows/{{ $json.workflowId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-API-KEY",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4ZmQ4ODkxNi03YmQ2LTQ3Y2ItYWM3Ny0yZmZiZGEwMjllZjAiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzYxNzA2MTY2fQ.EjwddXxczzmmknGagW0_WG-s5mFX_mEFrsXok9MK5t0"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a840ffb3-20d7-4757-a932-c1756b27260c",
+      "name": "Get Workflow Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2800,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process ALL items\nconst items = $input.all();\n\nreturn items.map((item, index) => {\n  const workflowInfo = $('Get Current Workflow').all()[index].json;\n  const workflowData = item.json;\n  \n  const filename = workflowInfo.workflowName.replace(/[^a-z0-9]/gi, '_') + '_' + workflowInfo.workflowId + '.json';\n  const filepath = `/home/node/.n8n/backups/workflows/${workflowInfo.backupTimestamp}/${filename}`;\n  const jsonData = JSON.stringify(workflowData, null, 2);\n  const base64Data = Buffer.from(jsonData).toString('base64');\n  \n  return {\n    json: {\n      filename: filename,\n      filepath: filepath,\n      jsonData: jsonData,\n      base64Data: base64Data,\n      workflowId: workflowInfo.workflowId,\n      workflowName: workflowInfo.workflowName\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2576,
+        704
+      ],
+      "id": "190fd84c-dfba-402b-9f84-c4d1b6af8744",
+      "name": "Prepare File Write"
+    },
+    {
+      "parameters": {
+        "command": "=mkdir -p \"$(dirname \"{{ $json.filepath }}\")\" && echo '{{ $json.base64Data }}' | base64 -d > \"{{ $json.filepath }}\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -2064,
+        816
+      ],
+      "id": "06743c68-a890-4aab-86f0-d4a5156b2f65",
+      "name": "Write Workflow JSON",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "backup-complete",
+              "name": "backupComplete",
+              "value": "={{ $now.format('yyyy-MM-dd HH:mm:ss') }}",
+              "type": "string"
+            },
+            {
+              "id": "total-workflows",
+              "name": "totalWorkflowsBackedUp",
+              "value": "={{ $('Set Backup Metadata').first().json.workflowCount }}",
+              "type": "number"
+            },
+            {
+              "id": "backup-location",
+              "name": "backupLocation",
+              "value": "=/home/node/.n8n/backups/workflows/{{ $('Set Backup Metadata').first().json.backupTimestamp }}/",
+              "type": "string"
+            },
+            {
+              "id": "status",
+              "name": "status",
+              "value": "SUCCESS",
+              "type": "string"
+            },
+            {
+              "id": "backup-timestamp",
+              "name": "backupTimestamp",
+              "value": "={{ $('Set Backup Metadata').first().json.backupTimestamp }}",
+              "type": "string"
+            },
+            {
+              "id": "workflows-list",
+              "name": "workflowsList",
+              "value": "={{ $('Set Backup Metadata').first().json.workflowsArray }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "41fce76f-59ac-4a72-a0b0-91b2626f293f",
+      "name": "Backup Summary",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1680,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-first",
+              "leftValue": "={{ $itemIndex }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5c2e7d7f-dbea-441d-9d85-745af2f33def",
+      "name": "Only Write Manifest Once",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1488,
+        464
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const manifestData = {\n  backupDate: $input.item.json.backupComplete,\n  totalWorkflows: $input.item.json.totalWorkflowsBackedUp,\n  backupLocation: $input.item.json.backupLocation,\n  status: $input.item.json.status,\n  workflows: $input.item.json.workflowsList.map(w => ({\n    id: w.id,\n    name: w.name,\n    active: w.active\n  }))\n};\n\nconst manifestJson = JSON.stringify(manifestData, null, 2);\nconst manifestBase64 = Buffer.from(manifestJson).toString('base64');\nconst manifestPath = `/home/node/.n8n/backups/workflows/${$input.item.json.backupTimestamp}/_backup_manifest.json`;\n\nreturn [{\n  json: {\n    manifestJson: manifestJson,\n    manifestBase64: manifestBase64,\n    manifestPath: manifestPath\n  }\n}];"
+      },
+      "id": "6caff052-7129-4068-a607-8b9f91f02219",
+      "name": "Prepare Manifest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1280,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "command": "=mkdir -p \"$(dirname \"{{ $json.manifestPath }}\")\" && echo '{{ $json.manifestBase64 }}' | base64 -d > \"{{ $json.manifestPath }}\""
+      },
+      "id": "dbe1d2ac-1f58-4caf-81ed-bf153726573f",
+      "name": "Write Backup Manifest",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -1136,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "command": "find /home/node/.n8n/backups/workflows -type d -mtime +30 -exec rm -rf {} + 2>/dev/null || true"
+      },
+      "id": "0fb26659-1a50-4e02-94a9-8b8869e247e0",
+      "name": "Cleanup Old Backups (30+ days)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -1264,
+        704
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "notes": "Removes backup directories older than 30 days"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "final-message",
+              "name": "message",
+              "value": "=Backup completed successfully!\n\nTotal workflows backed up: {{ $('Backup Summary').item.json.totalWorkflowsBackedUp }}\nBackup location (container): {{ $('Backup Summary').item.json.backupLocation }}\nBackup location (host): /opt/n8n/backups/workflows/{{ $('Backup Summary').item.json.backupTimestamp }}/\nCompleted at: {{ $('Backup Summary').item.json.backupComplete }}\n\nOld backups (30+ days) have been cleaned up.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "16d2b90f-c06d-4dfb-8c28-34e13946e4c4",
+      "name": "Final Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1040,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -2288,
+        624
+      ],
+      "id": "cbc02314-c708-427f-baf3-93b4dcffb5db",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -1440,
+        880
+      ],
+      "id": "5d07f596-f042-4015-b4f2-ea6315e0f601",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -832,
+        704
+      ],
+      "id": "cf62321b-1f76-4be5-ad6c-828cc0c810fa",
+      "name": "No Operation, do nothing1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Daily 2 AM": {
+      "main": [
+        [
+          {
+            "node": "Get Active Workflows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Workflows": {
+      "main": [
+        [
+          {
+            "node": "Set Backup Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Backup Metadata": {
+      "main": [
+        [
+          {
+            "node": "Create Backup Directory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Backup Directory": {
+      "main": [
+        [
+          {
+            "node": "Split Workflows for Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Workflows for Processing": {
+      "main": [
+        [
+          {
+            "node": "Get Current Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Current Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get Workflow Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Workflow Details": {
+      "main": [
+        [
+          {
+            "node": "Prepare File Write",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare File Write": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Workflow JSON": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Backup Summary": {
+      "main": [
+        [
+          {
+            "node": "Only Write Manifest Once",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only Write Manifest Once": {
+      "main": [
+        [
+          {
+            "node": "Prepare Manifest",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Manifest": {
+      "main": [
+        [
+          {
+            "node": "Write Backup Manifest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Backup Manifest": {
+      "main": [
+        [
+          {
+            "node": "Cleanup Old Backups (30+ days)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cleanup Old Backups (30+ days)": {
+      "main": [
+        [
+          {
+            "node": "Final Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Backup Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Write Workflow JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Output": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "436b5c1b-9a3f-4d4b-9806-e9ef35d29244",
+  "meta": {
+    "instanceId": "100235c335eb882bd7dc4dc3e300e2d9d5c5fc73acdec7489046f5d3aa6adf7f"
+  },
+  "id": "kaj7tJf2gnqIsMhx",
+  "tags": []
+}

@@ -3,26 +3,6 @@
   "nodes": [
     {
       "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "minutes",
-              "minutesInterval": 60
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
-      "position": [
-        -304,
-        256
-      ],
-      "name": "Schedule Every 10 Minutes",
-      "id": "8823cdcd-3791-4566-ab16-897d0c53beb9"
-    },
-    {
-      "parameters": {
         "url": "https://api.prd.sternpinball.io/api/v1/portal/leaderboards/?event_code=hJjW-WXu-oCGQ&event_state=current&format=json",
         "options": {}
       },
@@ -73,7 +53,7 @@
       "typeVersion": 2.6,
       "position": [
         352,
-        16
+        -16
       ],
       "name": "Upsert Event Metadata",
       "id": "2cdd6f22-c3d9-44bb-ad03-fe4f0ab18c1e",
@@ -103,7 +83,49 @@
             "event_code": "={{ $json.event_code }}",
             "fetched_at": "={{ $json.fetched_at }}",
             "raw_response": "={{ JSON.stringify($json.raw_response) }}"
-          }
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "snapshot_id",
+              "displayName": "snapshot_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "event_code",
+              "displayName": "event_code",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fetched_at",
+              "displayName": "fetched_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "raw_response",
+              "displayName": "raw_response",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
         },
         "options": {}
       },
@@ -279,21 +301,43 @@
           "name": "Postgres account"
         }
       }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 60
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -304,
+        256
+      ],
+      "name": "Schedule Every 60 Minutes",
+      "id": "8823cdcd-3791-4566-ab16-897d0c53beb9"
+    },
+    {
+      "parameters": {
+        "content": "## To Do\n**Change ingestion rate when in production."
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -400,
+        448
+      ],
+      "typeVersion": 1,
+      "id": "69ef0154-e3e7-43a4-9beb-2f3bcfb8499a",
+      "name": "Sticky Note"
     }
   ],
   "pinData": {},
   "connections": {
-    "Schedule Every 10 Minutes": {
-      "main": [
-        [
-          {
-            "node": "Fetch Stern API Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Fetch Stern API Data": {
       "main": [
         [
@@ -413,13 +457,24 @@
           }
         ]
       ]
+    },
+    "Schedule Every 60 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Fetch Stern API Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "d233a8fd-87d6-432e-9107-5f67caea2b05",
+  "versionId": "b4bcb5a8-01bf-40f4-9fb9-138428b648ab",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "100235c335eb882bd7dc4dc3e300e2d9d5c5fc73acdec7489046f5d3aa6adf7f"
