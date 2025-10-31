@@ -8,6 +8,7 @@ from flask_cors import CORS
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
+import json
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
@@ -16,6 +17,32 @@ load_dotenv()
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 CORS(app)
+
+# Load configuration from config.json
+def load_config():
+    """Load configuration from config.json file"""
+    config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+    try:
+        with open(config_path, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"⚠️ Warning: Could not load config.json: {e}")
+        # Return default config
+        return {
+            "bar_name": "Pinball Leaderboard",
+            "logo_url": "/static/logo.png",
+            "display": {"scene_duration": 60, "transition_speed": 800},
+            "api": {"refresh_interval": 300000},
+            "theme": {
+                "primary_color": "#ff6b35",
+                "secondary_color": "#f7931e",
+                "background_color": "#1a1a2e",
+                "text_color": "#ffffff",
+                "accent_color": "#00d9ff"
+            }
+        }
+
+config = load_config()
 
 # ==================== DATABASE CONNECTION ====================
 
@@ -85,24 +112,8 @@ def serve_static(path):
 
 @app.route('/api/config')
 def get_config():
-    """Get configuration settings"""
-    return jsonify({
-        "bar_name": "Pinball Leaderboard",
-        "logo_url": "/static/logo.png",
-        "display": {
-            "scene_duration": 60
-        },
-        "api": {
-            "refresh_interval": 300000
-        },
-        "theme": {
-            "primary_color": "#ff6b35",
-            "secondary_color": "#f7931e",
-            "background_color": "#1a1a2e",
-            "text_color": "#ffffff",
-            "accent_color": "#00d9ff"
-        }
-    })
+    """Get configuration settings from config.json"""
+    return jsonify(config)
 
 @app.route('/api/leaderboard/top10')
 def get_top10():
