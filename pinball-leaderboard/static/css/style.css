@@ -92,6 +92,7 @@ main {
     animation: fadeIn 0.8s ease-in-out forwards;
     height: 100%;
     overflow-y: auto;
+    scroll-behavior: smooth;
 }
 
 .scene.active {
@@ -241,6 +242,9 @@ main {
     display: grid;
     grid-template-columns: 1fr;
     gap: 15px;
+    max-height: calc(100vh - 300px);
+    overflow-y: auto;
+    scroll-behavior: smooth;
 }
 
 .champion-card {
@@ -285,6 +289,9 @@ main {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    max-height: calc(100vh - 300px);
+    overflow-y: auto;
+    scroll-behavior: smooth;
 }
 
 .activity-item {
@@ -358,6 +365,7 @@ main {
     gap: 8px;
     max-height: calc(100vh - 300px);
     overflow-y: auto;
+    scroll-behavior: smooth;
 }
 
 .roster-item {

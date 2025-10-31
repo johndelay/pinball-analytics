@@ -79,6 +79,8 @@ class PinballKiosk {
     }
     
     async showScene(index) {
+        console.log('🎬 Showing scene:', index, this.scenes[index].name);
+        
         // Stop any existing scroll animation
         this.stopScrollAnimation();
         
@@ -99,10 +101,13 @@ class PinballKiosk {
             `Scene ${index + 1} of ${this.scenes.length}`;
         
         // Load scene data
+        console.log('📥 Loading scene data...');
         await scene.loader();
+        console.log('✅ Scene data loaded');
         
         // Start auto-scroll for this scene (after a short delay to let content render)
         setTimeout(() => {
+            console.log('⏰ Starting scroll animation after delay');
             this.startScrollAnimation(sceneElement);
         }, 500);
         
@@ -111,6 +116,8 @@ class PinballKiosk {
     }
     
     startScrollAnimation(sceneElement) {
+        console.log('🔍 Starting scroll animation for scene:', sceneElement.id);
+        
         // Find scrollable container within the scene
         const scrollableContainers = [
             sceneElement.querySelector('.full-roster'),
@@ -118,17 +125,29 @@ class PinballKiosk {
             sceneElement.querySelector('.champions-grid')
         ].filter(el => el !== null);
         
+        console.log('📦 Found scrollable containers:', scrollableContainers.length);
+        
         if (scrollableContainers.length === 0) {
+            console.log('⚠️ No scrollable containers found in this scene');
             return; // No scrollable content in this scene
         }
         
         const container = scrollableContainers[0];
         const maxScroll = container.scrollHeight - container.clientHeight;
         
+        console.log('📏 Container dimensions:', {
+            scrollHeight: container.scrollHeight,
+            clientHeight: container.clientHeight,
+            maxScroll: maxScroll
+        });
+        
         // Only scroll if there's overflow
         if (maxScroll <= 0) {
+            console.log('⚠️ No overflow detected - content fits on screen');
             return;
         }
+        
+        console.log('✅ Starting auto-scroll! Speed:', maxScroll / (this.sceneDuration - 2), 'px/sec');
         
         // Calculate scroll speed (pixels per second)
         // We want to scroll through the entire content during the scene duration
@@ -138,6 +157,7 @@ class PinballKiosk {
         let lastTimestamp = null;
         let currentScroll = 0;
         let direction = 1; // 1 for down, -1 for up
+        let frameCount = 0;
         
         const animate = (timestamp) => {
             if (!lastTimestamp) {
@@ -151,13 +171,26 @@ class PinballKiosk {
                 // Update scroll position
                 currentScroll += scrollSpeed * deltaTime * direction;
                 
+                // Log every 60 frames (once per second at 60fps)
+                frameCount++;
+                if (frameCount % 60 === 0) {
+                    console.log('🔄 Scrolling...', {
+                        currentScroll: Math.round(currentScroll),
+                        maxScroll: maxScroll,
+                        direction: direction === 1 ? 'down' : 'up',
+                        containerScrollTop: container.scrollTop
+                    });
+                }
+                
                 // Reverse direction at boundaries for smooth loop
                 if (currentScroll >= maxScroll) {
                     currentScroll = maxScroll;
                     direction = -1; // Start scrolling back up
+                    console.log('🔃 Reached bottom, reversing direction');
                 } else if (currentScroll <= 0) {
                     currentScroll = 0;
                     direction = 1; // Start scrolling down again
+                    console.log('🔃 Reached top, reversing direction');
                 }
                 
                 container.scrollTop = currentScroll;
@@ -170,6 +203,7 @@ class PinballKiosk {
         };
         
         this.scrollAnimationFrame = requestAnimationFrame(animate);
+        console.log('🎬 Animation frame started');
     }
     
     stopScrollAnimation() {
