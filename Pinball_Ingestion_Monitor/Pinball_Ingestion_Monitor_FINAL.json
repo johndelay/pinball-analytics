@@ -1,0 +1,272 @@
+{
+  "name": "Pinball Ingestion Monitor (CORRECTED)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Check Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-640, 240]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Check for recent API snapshots (ingestion activity)\nSELECT \n    COUNT(*) as recent_snapshots,\n    MAX(fetched_at) as last_snapshot,\n    EXTRACT(EPOCH FROM (NOW() - MAX(fetched_at)))/60 as minutes_since_last,\n    MIN(fetched_at) as earliest_recent_snapshot,\n    (SELECT COUNT(*) FROM api_snapshots) as total_snapshots,\n    (SELECT COUNT(*) FROM players) as total_players,\n    (SELECT COUNT(*) FROM machines) as total_machines,\n    (SELECT COUNT(DISTINCT event_code) FROM api_snapshots) as events_tracked\nFROM api_snapshots\nWHERE fetched_at > NOW() - INTERVAL '90 minutes';",
+        "options": {}
+      },
+      "id": "check-recent-data",
+      "name": "Check Recent Snapshots",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [-416, 240],
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Pinball PostgreSQL"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Get snapshot statistics for the last 24 hours\nSELECT \n    DATE_TRUNC('hour', fetched_at) as hour,\n    COUNT(*) as snapshots_per_hour,\n    COUNT(DISTINCT event_code) as unique_events,\n    array_agg(DISTINCT event_code) as event_codes\nFROM api_snapshots\nWHERE fetched_at > NOW() - INTERVAL '24 hours'\nGROUP BY DATE_TRUNC('hour', fetched_at)\nORDER BY hour DESC\nLIMIT 24;",
+        "options": {}
+      },
+      "id": "get-ingestion-stats",
+      "name": "Get 24hr Stats",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [-192, 240],
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Pinball PostgreSQL"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-recent-snapshots",
+              "leftValue": "={{ $('Check Recent Snapshots').item.json.recent_snapshots }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "check-time-threshold",
+              "leftValue": "={{ $('Check Recent Snapshots').item.json.minutes_since_last }}",
+              "rightValue": 90,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "is-ingestion-healthy",
+      "name": "Is Ingestion Healthy?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [32, 240]
+    },
+    {
+      "parameters": {
+        "command": "cat /tmp/pinball_ingestion_state 2>/dev/null || echo 'unknown'"
+      },
+      "id": "check-state",
+      "name": "Check Previous State",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [252, 360]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-was-down",
+              "leftValue": "={{ $('Check Previous State').item.json.stdout.trim() }}",
+              "rightValue": "failing",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "was-failing",
+      "name": "Was Previously Failing?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [472, 360]
+    },
+    {
+      "parameters": {
+        "sendTo": "john@thedelay.com",
+        "subject": "✅ Pinball API Ingestion Recovered",
+        "message": "=<h2 style=\"color: #00aa00;\">✅ API Ingestion Recovery</h2>\n\n<p><strong>Status:</strong> API snapshots are being captured normally</p>\n<p><strong>Time:</strong> {{ $now.format('YYYY-MM-DD HH:mm:ss') }}</p>\n\n<hr>\n\n<h3>Current Status:</h3>\n<ul>\n  <li><strong>Recent Snapshots:</strong> {{ $('Check Recent Snapshots').item.json.recent_snapshots }} in last 90 minutes</li>\n  <li><strong>Last Snapshot:</strong> {{ $('Check Recent Snapshots').item.json.last_snapshot }}</li>\n  <li><strong>Minutes Since Last:</strong> {{ Math.round($('Check Recent Snapshots').item.json.minutes_since_last) }} minutes</li>\n  <li><strong>Total Snapshots:</strong> {{ $('Check Recent Snapshots').item.json.total_snapshots }}</li>\n  <li><strong>Events Tracked:</strong> {{ $('Check Recent Snapshots').item.json.events_tracked }}</li>\n  <li><strong>Total Players:</strong> {{ $('Check Recent Snapshots').item.json.total_players }}</li>\n  <li><strong>Total Machines:</strong> {{ $('Check Recent Snapshots').item.json.total_machines }}</li>\n</ul>\n\n<hr>\n\n<p>The Pinball Leaderboard API ingestion has recovered and is capturing snapshots normally.</p>\n\n<p style=\"color: #666;\"><em>Automated alert from Pinball Ingestion Monitor</em></p>",
+        "options": {}
+      },
+      "id": "gmail-recovery",
+      "name": "Gmail Recovery Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [692, 280],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "OF6yDXch5kgNOSlx",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "command": "echo 'healthy' > /tmp/pinball_ingestion_state"
+      },
+      "id": "mark-healthy",
+      "name": "Mark as Healthy",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [912, 330]
+    },
+    {
+      "parameters": {
+        "command": "echo 'failing' > /tmp/pinball_ingestion_state"
+      },
+      "id": "mark-failing",
+      "name": "Mark as Failing",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [252, 120]
+    },
+    {
+      "parameters": {
+        "sendTo": "john@thedelay.com",
+        "subject": "🚨 ALERT: Pinball API Ingestion Failure",
+        "message": "=<h2 style=\"color: #ff0000;\">⚠️ Pinball API Ingestion Alert</h2>\n\n<p><strong>Status:</strong> API snapshots are NOT being captured</p>\n<p><strong>Time:</strong> {{ $now.format('YYYY-MM-DD HH:mm:ss') }}</p>\n\n<hr>\n\n<h3>Problem Detected:</h3>\n<ul>\n  <li><strong>Recent Snapshots:</strong> {{ $('Check Recent Snapshots').item.json?.recent_snapshots || 'N/A' }} in last 90 minutes ⚠️</li>\n  <li><strong>Last Snapshot:</strong> {{ $('Check Recent Snapshots').item.json?.last_snapshot || 'Unknown' }}</li>\n  <li><strong>Minutes Since Last:</strong> {{ Math.round($('Check Recent Snapshots').item.json?.minutes_since_last || 999) }} minutes ⚠️</li>\n  <li><strong>Total Snapshots:</strong> {{ $('Check Recent Snapshots').item.json?.total_snapshots || 'N/A' }}</li>\n  <li><strong>Events Tracked:</strong> {{ $('Check Recent Snapshots').item.json?.events_tracked || 'N/A' }}</li>\n  <li><strong>Total Players:</strong> {{ $('Check Recent Snapshots').item.json?.total_players || 'N/A' }}</li>\n  <li><strong>Total Machines:</strong> {{ $('Check Recent Snapshots').item.json?.total_machines || 'N/A' }}</li>\n</ul>\n\n<hr>\n\n<h3>Possible Issues:</h3>\n<ul>\n  <li>⏰ n8n workflow \"Pinball Leaderboard Ingestion (Production - Working)\" not running on schedule</li>\n  <li>🌐 External API (leaderboard source) is down or unreachable</li>\n  <li>🔑 API authentication/credentials expired</li>\n  <li>💾 Database connection issues preventing snapshot storage</li>\n  <li>🔧 n8n workflow has execution errors</li>\n  <li>📡 Network connectivity problems</li>\n</ul>\n\n<hr>\n\n<h3>Action Required:</h3>\n<ol>\n  <li>Check n8n execution history for \"Pinball Leaderboard Ingestion (Production - Working)\" workflow</li>\n  <li>Verify the workflow is still scheduled to run every hour</li>\n  <li>Check for error messages in n8n execution logs</li>\n  <li>Verify the external API endpoint is accessible</li>\n  <li>Test API credentials/authentication</li>\n  <li>Check PostgreSQL connection from n8n</li>\n  <li>Manually trigger the ingestion workflow to test</li>\n  <li>Check api_snapshots table: <code>SELECT * FROM api_snapshots ORDER BY fetched_at DESC LIMIT 5;</code></li>\n</ol>\n\n<hr>\n\n<h3>Snapshot Pattern (Last 24 Hours):</h3>\n<pre>{{ JSON.stringify($('Get 24hr Stats').all().map(item => ({\n  hour: item.json.hour,\n  snapshots: item.json.snapshots_per_hour,\n  events: item.json.unique_events,\n  event_codes: item.json.event_codes\n})), null, 2) }}</pre>\n\n<p style=\"color: #666;\"><em>Automated alert from Pinball Ingestion Monitor</em></p>\n<p style=\"color: #666;\"><em>Expected: API snapshots every ~60 minutes | Threshold: 90 minutes</em></p>",
+        "options": {}
+      },
+      "id": "gmail-failure",
+      "name": "Gmail Failure Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [472, 120],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "OF6yDXch5kgNOSlx",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Check if snapshots contain valid data\nSELECT \n    snapshot_id,\n    event_code,\n    fetched_at,\n    jsonb_typeof(raw_response) as response_type,\n    jsonb_array_length(raw_response) as response_size,\n    CASE \n        WHEN raw_response IS NULL THEN '❌ NULL'\n        WHEN jsonb_typeof(raw_response) = 'array' AND jsonb_array_length(raw_response) = 0 THEN '⚠️ EMPTY'\n        WHEN jsonb_typeof(raw_response) = 'array' AND jsonb_array_length(raw_response) > 0 THEN '✅ VALID'\n        ELSE '⚠️ UNEXPECTED'\n    END as data_quality\nFROM api_snapshots\nWHERE fetched_at > NOW() - INTERVAL '3 hours'\nORDER BY fetched_at DESC\nLIMIT 5;",
+        "options": {}
+      },
+      "id": "check-data-quality",
+      "name": "Check Data Quality",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [-192, 400],
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Pinball PostgreSQL"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Check active events being tracked\nSELECT \n    e.event_code,\n    e.event_name,\n    e.event_type,\n    e.is_active,\n    e.start_date,\n    e.stop_date,\n    (SELECT COUNT(*) FROM api_snapshots a WHERE a.event_code = e.event_code AND a.fetched_at > NOW() - INTERVAL '24 hours') as snapshots_last_24h,\n    (SELECT MAX(fetched_at) FROM api_snapshots a WHERE a.event_code = e.event_code) as last_snapshot_for_event\nFROM events e\nWHERE e.is_active = true\nORDER BY last_snapshot_for_event DESC NULLS LAST;",
+        "options": {}
+      },
+      "id": "check-active-events",
+      "name": "Check Active Events",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [-192, 520],
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Pinball PostgreSQL"
+        }
+      },
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Check Every 15 Minutes": {
+      "main": [[{"node": "Check Recent Snapshots", "type": "main", "index": 0}]]
+    },
+    "Check Recent Snapshots": {
+      "main": [[
+        {"node": "Get 24hr Stats", "type": "main", "index": 0},
+        {"node": "Check Data Quality", "type": "main", "index": 0},
+        {"node": "Check Active Events", "type": "main", "index": 0}
+      ]]
+    },
+    "Get 24hr Stats": {
+      "main": [[{"node": "Is Ingestion Healthy?", "type": "main", "index": 0}]]
+    },
+    "Is Ingestion Healthy?": {
+      "main": [
+        [{"node": "Check Previous State", "type": "main", "index": 0}],
+        [{"node": "Mark as Failing", "type": "main", "index": 0}]
+      ]
+    },
+    "Check Previous State": {
+      "main": [[{"node": "Was Previously Failing?", "type": "main", "index": 0}]]
+    },
+    "Was Previously Failing?": {
+      "main": [
+        [{"node": "Gmail Recovery Alert", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Gmail Recovery Alert": {
+      "main": [[{"node": "Mark as Healthy", "type": "main", "index": 0}]]
+    },
+    "Mark as Failing": {
+      "main": [[{"node": "Gmail Failure Alert", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}
