@@ -1,37 +1,29 @@
-# Recreate .gitignore without spaces
-cat > .gitignore << 'EOF'
-# Environment & Secrets
+# Environment variables (NEVER COMMIT THESE!)
 .env
-.env.*
-*.env
+.env_orig
 
-# Credentials
-credentials.json
-config/secrets.yaml
-
-# N8n specific
-.n8n/
-*.credentials.json
-
-# Database
-*.db
-*.sqlite
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
 
 # Logs
 *.log
-logs/
+flask.log
 
-# OS Files
-.DS_Store
-Thumbs.db
+# Backup files
+*_orig.py
+*_broken*.py
+api_server (*.py
 
 # IDE
 .vscode/
 .idea/
+*.swp
 
-# Node modules
-node_modules/
-
-# Claude
-.claude/
-EOF
+# OS
+.DS_Store
+Thumbs.db

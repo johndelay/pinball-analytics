@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  pinball-leaderboard:
+    build: .
+    container_name: pinball-leaderboard
+    ports:
+      - "5050:5050"
+    volumes:
+      - ./static:/app/static:ro
+      - ./config.json:/app/config.json:ro
+      - ./.env:/app/.env:ro
+    environment:
+      - FLASK_ENV=production
+      - PORT=5050
+    restart: unless-stopped
+    networks:
+      - pinball-network
+    extra_hosts:
+      - "docker.thedelay.internal:host-gateway"
+
+networks:
+  pinball-network:
+    driver: bridge

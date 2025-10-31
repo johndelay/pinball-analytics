@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Docker (don't copy these into the image)
+Dockerfile
+docker-compose.yml
+docker-compose_*.yml
+.dockerignore
+
+# Documentation (not needed in container)
+*.md
+README.md
+DEPLOYMENT.md
+DATABASE_INTEGRATION.md
+PROJECT_SUMMARY.md
+CHECKLIST.md
+QUICK_REFERENCE.md
+VISUAL_GUIDE.md
+
+# Logs
+*.log
+flask.log
+
+# Environment files (mounted as volumes, not copied)
+.env
+.env_orig
+.env.example
+
+# Database files
+*.sql
+database_views.sql
+
+# Backup/temp Python files (you have several of these)
+*_orig.py
+*_broken*.py
+*_backup.py
+api_server (*.py
+app.py
+
+# OS files
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Static directory backup
+{static

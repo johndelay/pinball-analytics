@@ -9,7 +9,6 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
 from datetime import datetime, timedelta
-from functools import wraps
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -23,13 +22,13 @@ CORS(app)
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
     'port': os.getenv('DB_PORT', '5432'),
-    'database': os.getenv('DB_NAME', 'pinball_leaderboard'),
+    'database': os.getenv('DB_NAME', 'pinball'),
     'user': os.getenv('DB_USER', 'postgres'),
     'password': os.getenv('DB_PASSWORD', 'your_password_here')
 }
 
 def get_db_connection():
-    """Create a database connection"""
+    """Create a database connection with RealDictCursor"""
     return psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
 
 def query_db(query, params=None, one=False):
@@ -39,24 +38,38 @@ def query_db(query, params=None, one=False):
         cur = conn.cursor()
         cur.execute(query, params or ())
         
-        if query.strip().upper().startswith('SELECT'):
+        # Check if this is a SELECT query (including CTEs that start with WITH)
+        query_upper = query.strip().upper()
+        is_select = query_upper.startswith('SELECT') or query_upper.startswith('WITH')
+        
+        if is_select:
             rv = cur.fetchall()
-            return (rv[0] if rv else None) if one else rv
+            print(f"🔍 Query returned {len(rv) if rv else 0} rows")
+            if rv and len(rv) > 0:
+                print(f"🔍 First row: {dict(rv[0])}")
+            result = (rv[0] if rv else None) if one else rv
+            cur.close()
+            conn.close()
+            return result
         else:
             conn.commit()
+            cur.close()
+            conn.close()
             return None
     except Exception as e:
         print(f"❌ Database query error: {type(e).__name__}: {e}")
-        print(f"Query (first 300 chars): {query[:300]}...")
+        print(f"Query (first 500 chars): {query[:500]}...")
         if params:
             print(f"Parameters: {params}")
         import traceback
         traceback.print_exc()
-        if query.strip().upper().startswith('SELECT'):
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+        if is_select:
             return [] if not one else None
         return None
-    finally:
-        conn.close()
 
 # ==================== API ENDPOINTS ====================
 
@@ -95,57 +108,25 @@ def get_config():
 def get_top10():
     """Get top 10 players from the leaderboard"""
     query = """
-        WITH current_rankings AS (
-            SELECT 
-                player_id,
-                combined_score,
-                current_rank,
-                ROW_NUMBER() OVER (ORDER BY combined_score DESC) as rank
-            FROM leaderboard_cache
-            ORDER BY combined_score DESC
-            LIMIT 10
-        ),
-        player_games AS (
-            SELECT 
-                player_id,
-                COUNT(DISTINCT machine_id) as games_played
-            FROM high_scores_archive
-            WHERE event_code = (SELECT event_code FROM events WHERE is_active = true LIMIT 1)
-            GROUP BY player_id
-        ),
-        rank_history AS (
-            SELECT DISTINCT ON (player_id)
-                player_id,
-                current_rank,
-                LAG(current_rank) OVER (PARTITION BY player_id ORDER BY recorded_at DESC) as previous_rank
-            FROM leaderboard_history
-            WHERE recorded_at >= NOW() - INTERVAL '7 days'
-            ORDER BY player_id, recorded_at DESC
-        )
         SELECT 
-            cr.rank,
+            ROW_NUMBER() OVER (ORDER BY lc.combined_score DESC) as rank,
             p.display_name as name,
-            cr.combined_score as score,
-            COALESCE(pg.games_played, 0) as games_played,
-            CASE 
-                WHEN rh.previous_rank IS NULL THEN 'neutral'
-                WHEN rh.previous_rank > cr.current_rank THEN 'up'
-                WHEN rh.previous_rank < cr.current_rank THEN 'down'
-                ELSE 'neutral'
-            END as trend,
-            COALESCE(ABS(rh.previous_rank - cr.current_rank), 0) as trend_positions
-        FROM current_rankings cr
-        JOIN players p ON cr.player_id = p.player_id
-        LEFT JOIN player_games pg ON cr.player_id = pg.player_id
-        LEFT JOIN rank_history rh ON cr.player_id = rh.player_id
-        ORDER BY cr.rank;
+            lc.combined_score as score,
+            0 as games_played,
+            'neutral' as trend,
+            0 as trend_positions
+        FROM leaderboard_cache lc
+        JOIN players p ON lc.player_id = p.player_id
+        ORDER BY lc.combined_score DESC
+        LIMIT 10;
     """
     
     results = query_db(query)
-    if results is None:
-        print("⚠️ Top 10 query returned None - returning empty list")
+    if results is None or len(results) == 0:
+        print("⚠️ Top 10 query returned None or empty - returning empty list")
         return jsonify([])
     
+    print(f"✅ Top 10 query returned {len(results)} players")
     return jsonify([dict(row) for row in results])
 
 @app.route('/api/leaderboard/full')
@@ -171,32 +152,44 @@ def get_full_leaderboard():
 @app.route('/api/game-champions')
 def get_game_champions():
     """Get the champion (highest score) for each machine"""
+    # Get active event first
+    event = query_db("SELECT event_code FROM events WHERE is_active = true LIMIT 1", one=True)
+    
+    if not event or 'event_code' not in event:
+        print("⚠️ No active event found for game champions")
+        return jsonify([])
+    
+    event_code = event['event_code']
+    print(f"🎮 Getting champions for event: {event_code}")
+    
+    # Query for game champions
     query = """
-        WITH machine_champions AS (
-            SELECT DISTINCT ON (machine_id)
+        WITH ranked_scores AS (
+            SELECT 
                 machine_id,
                 player_id,
-                high_score
+                high_score,
+                ROW_NUMBER() OVER (PARTITION BY machine_id ORDER BY high_score DESC) as rn
             FROM high_scores_archive
-            WHERE event_code = (SELECT event_code FROM events WHERE is_active = true LIMIT 1)
-            ORDER BY machine_id, high_score DESC
+            WHERE event_code = %s
         )
         SELECT 
             m.machine_name as name,
             p.display_name as champion,
-            mc.high_score as score
-        FROM machine_champions mc
-        JOIN machines m ON mc.machine_id = m.machine_id
-        JOIN players p ON mc.player_id = p.player_id
-        WHERE m.is_active = true
-        ORDER BY mc.high_score DESC;
+            rs.high_score as score
+        FROM ranked_scores rs
+        JOIN machines m ON rs.machine_id = m.machine_id
+        JOIN players p ON rs.player_id = p.player_id
+        WHERE rs.rn = 1 AND m.is_active = true
+        ORDER BY rs.high_score DESC;
     """
     
-    results = query_db(query)
-    if results is None:
-        print("⚠️ Game champions query returned None - returning empty list")
+    results = query_db(query, (event_code,))
+    if not results or len(results) == 0:
+        print("⚠️ Game champions query returned None or empty")
         return jsonify([])
     
+    print(f"✅ Game champions query returned {len(results)} machines")
     return jsonify([dict(row) for row in results])
 
 @app.route('/api/recent-activity')
@@ -233,8 +226,8 @@ def get_recent_activity():
     
     results = query_db(query)
     
-    if results is None:
-        print("⚠️ Recent activity query returned None - returning empty list")
+    if not results or len(results) == 0:
+        print("⚠️ Recent activity query returned None or empty - returning empty list")
         return jsonify([])
     
     activities = []
@@ -243,6 +236,7 @@ def get_recent_activity():
         activity['minutes_ago'] = int(activity['minutes_ago']) if activity['minutes_ago'] else 0
         activities.append(activity)
     
+    print(f"✅ Recent activity query returned {len(activities)} activities")
     return jsonify(activities)
 
 @app.route('/api/statistics')
@@ -358,7 +352,7 @@ def diagnostics():
         query_db("SELECT 1", one=True)
         diagnostics_data["database_connection"] = "✅ Connected"
         
-        # Check for required tables (lowercase!)
+        # Check for required tables
         tables_to_check = ['events', 'players', 'machines', 'high_scores_archive', 
                           'leaderboard_cache', 'leaderboard_history']
         
@@ -402,39 +396,59 @@ def diagnostics():
         diagnostics_data["database_connection"] = f"❌ Failed: {str(e)}"
         return jsonify(diagnostics_data), 500
 
-@app.route('/api/test-schema')
-def test_schema():
-    """Test endpoint to check actual column names"""
-    results = {}
-    
-    # Test simple query first
+@app.route('/api/test-query')
+def test_query():
+    """Test endpoint to verify game champions query"""
     try:
-        sample = query_db("SELECT * FROM leaderboard_cache LIMIT 1", one=True)
-        if sample:
-            results["leaderboard_cache_columns"] = list(sample.keys())
-            results["leaderboard_cache_sample"] = dict(sample)
-        else:
-            results["leaderboard_cache_columns"] = "No rows"
+        # Get event
+        print("🔧 Step 1: Getting active event...")
+        event = query_db("SELECT event_code FROM events WHERE is_active = true LIMIT 1", one=True)
+        if not event:
+            return jsonify({"error": "No active event"})
+        
+        event_code = event['event_code']
+        print(f"🔧 Step 2: Event code is: {event_code}")
+        
+        # Run the exact query with explicit debugging
+        query = """
+            WITH ranked_scores AS (
+                SELECT 
+                    machine_id,
+                    player_id,
+                    high_score,
+                    ROW_NUMBER() OVER (PARTITION BY machine_id ORDER BY high_score DESC) as rn
+                FROM high_scores_archive
+                WHERE event_code = %s
+            )
+            SELECT 
+                m.machine_name as name,
+                p.display_name as champion,
+                rs.high_score as score
+            FROM ranked_scores rs
+            JOIN machines m ON rs.machine_id = m.machine_id
+            JOIN players p ON rs.player_id = p.player_id
+            WHERE rs.rn = 1 AND m.is_active = true
+            ORDER BY rs.high_score DESC;
+        """
+        
+        print(f"🔧 Step 3: About to execute main query with event_code={event_code}")
+        print(f"🔧 Query preview: {query[:200]}...")
+        
+        results = query_db(query, (event_code,))
+        
+        print(f"🔧 Step 4: Query completed. Results type: {type(results)}, Results: {results}")
+        
+        return jsonify({
+            "event_code": event_code,
+            "results_count": len(results) if results else 0,
+            "results_type": str(type(results)),
+            "results": [dict(r) for r in results] if results else []
+        })
     except Exception as e:
-        results["leaderboard_cache_error"] = str(e)
-    
-    # Test JOIN
-    try:
-        test_join = query_db("""
-            SELECT lc.player_id, lc.combined_score, p.display_name
-            FROM leaderboard_cache lc
-            JOIN players p ON lc.player_id = p.player_id
-            LIMIT 1
-        """, one=True)
-        if test_join:
-            results["join_test"] = "✅ SUCCESS"
-            results["join_sample"] = dict(test_join)
-        else:
-            results["join_test"] = "⚠️ No results"
-    except Exception as e:
-        results["join_test"] = f"❌ FAILED: {str(e)}"
-    
-    return jsonify(results)
+        print(f"🔧 ERROR in test_query: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 # ==================== ERROR HANDLERS ====================
 
