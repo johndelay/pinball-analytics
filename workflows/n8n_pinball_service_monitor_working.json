@@ -1,0 +1,274 @@
+{
+  "name": "Pinball Service Monitor (With State Tracking)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Check Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-432, 128]
+    },
+    {
+      "parameters": {
+        "url": "http://192.168.86.108:5050/api/health",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "health-check",
+      "name": "Health Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-208, 128],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "http://192.168.86.108:5050/api/diagnostics",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "diagnostics-check",
+      "name": "Get Diagnostics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [16, 128],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-status",
+              "leftValue": "={{ $('Health Check').item.json.status }}",
+              "rightValue": "healthy",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "check-database",
+              "leftValue": "={{ $('Health Check').item.json.database }}",
+              "rightValue": "connected",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-healthy",
+      "name": "Is Service Healthy?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [240, 128]
+    },
+    {
+      "parameters": {
+        "command": "cat /tmp/pinball_api_state 2>/dev/null || echo 'unknown'"
+      },
+      "id": "check-state",
+      "name": "Check Previous State",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [460, 240]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-was-down",
+              "leftValue": "={{ $('Check Previous State').item.json.stdout.trim() }}",
+              "rightValue": "down",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "was-down",
+      "name": "Was Previously Down?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pushinator.com/api/v2/notifications/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"channel_id\": \"9fff94db-1a11-43f6-9040-03783d9a7fc4\",\n  \"content\": \"✅ Pinball API Recovered\\n\\nThe Pinball Leaderboard API is back online and healthy!\\n\\nTime: {{ $now.format('HH:mm:ss') }}\"\n}"
+      },
+      "id": "push-recovery",
+      "name": "Pushinator Recovery ✅",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 160],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "UuRnqpWbhdbG6ycc",
+          "name": "Pushinator API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "john@thedelay.com",
+        "subject": "✅ Pinball API Service Recovered",
+        "message": "=<h2 style=\"color: #00aa00;\">✅ Service Recovery Notification</h2>\n\n<p><strong>Status:</strong> Service is HEALTHY</p>\n<p><strong>Time:</strong> {{ $now.format('YYYY-MM-DD HH:mm:ss') }}</p>\n\n<hr>\n\n<p>The Pinball Leaderboard API has recovered and is operating normally.</p>\n\n<h3>Current Status:</h3>\n<pre>{{ JSON.stringify($('Health Check').item.json || {}, null, 2) }}</pre>",
+        "options": {}
+      },
+      "id": "gmail-recovery",
+      "name": "Gmail Recovery",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [900, 260],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "OF6yDXch5kgNOSlx",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "command": "echo 'up' > /tmp/pinball_api_state"
+      },
+      "id": "mark-up",
+      "name": "Mark as Up",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1120, 210]
+    },
+    {
+      "parameters": {
+        "command": "echo 'down' > /tmp/pinball_api_state"
+      },
+      "id": "mark-down",
+      "name": "Mark as Down",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [460, 20]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pushinator.com/api/v2/notifications/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"channel_id\": \"9fff94db-1a11-43f6-9040-03783d9a7fc4\",\n  \"content\": \"🚨 Pinball API Down!\\n\\nThe Pinball Leaderboard API is not responding on port 5050. Check the service immediately!\\n\\nTime: {{ $now.format('HH:mm:ss') }}\"\n}"
+      },
+      "id": "push-alert",
+      "name": "Pushinator Alert 🚨",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, -60],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "UuRnqpWbhdbG6ycc",
+          "name": "Pushinator API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "john@thedelay.com",
+        "subject": "🚨 ALERT: Pinball API Service Down",
+        "message": "=<h2 style=\"color: #ff0000;\">⚠️ Pinball Leaderboard API Alert</h2>\n\n<p><strong>Status:</strong> Service is DOWN or UNHEALTHY</p>\n<p><strong>Time:</strong> {{ $now.format('YYYY-MM-DD HH:mm:ss') }}</p>\n\n<hr>\n\n<h3>Health Check Response:</h3>\n<pre>{{ JSON.stringify($('Health Check').item.json, null, 2) }}</pre>\n\n<h3>Diagnostics:</h3>\n<pre>{{ JSON.stringify($('Get Diagnostics').item.json, null, 2) }}</pre>\n\n<hr>\n\n<p><strong>Action Required:</strong></p>\n<ul>\n  <li>Check if Flask server is running on port 5050</li>\n  <li>Verify PostgreSQL database connection</li>\n  <li>Check server logs for errors</li>\n  <li>Restart service if necessary</li>\n</ul>\n\n<p style=\"color: #666;\"><em>Automated alert from Pinball Monitoring System</em></p>",
+        "options": {}
+      },
+      "id": "gmail-alert",
+      "name": "Gmail Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [680, 20],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "OF6yDXch5kgNOSlx",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Check Every 5 Minutes": {
+      "main": [[{"node": "Health Check", "type": "main", "index": 0}]]
+    },
+    "Health Check": {
+      "main": [[{"node": "Get Diagnostics", "type": "main", "index": 0}]]
+    },
+    "Get Diagnostics": {
+      "main": [[{"node": "Is Service Healthy?", "type": "main", "index": 0}]]
+    },
+    "Is Service Healthy?": {
+      "main": [
+        [{"node": "Check Previous State", "type": "main", "index": 0}],
+        [{"node": "Mark as Down", "type": "main", "index": 0}]
+      ]
+    },
+    "Check Previous State": {
+      "main": [[{"node": "Was Previously Down?", "type": "main", "index": 0}]]
+    },
+    "Was Previously Down?": {
+      "main": [
+        [
+          {"node": "Pushinator Recovery ✅", "type": "main", "index": 0},
+          {"node": "Gmail Recovery", "type": "main", "index": 0}
+        ],
+        []
+      ]
+    },
+    "Pushinator Recovery ✅": {
+      "main": [[{"node": "Mark as Up", "type": "main", "index": 0}]]
+    },
+    "Gmail Recovery": {
+      "main": [[{"node": "Mark as Up", "type": "main", "index": 0}]]
+    },
+    "Mark as Down": {
+      "main": [
+        [
+          {"node": "Pushinator Alert 🚨", "type": "main", "index": 0},
+          {"node": "Gmail Alert", "type": "main", "index": 0}
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}
