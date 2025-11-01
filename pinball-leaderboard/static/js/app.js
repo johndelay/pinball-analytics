@@ -130,14 +130,15 @@ class PinballKiosk {
             return;
         }
         
-        // Calculate scroll speed (pixels per second)
-        // We want to scroll through the entire content during the scene duration
-        const scrollDuration = this.sceneDuration - 2; // Leave 2 seconds buffer
-        const scrollSpeed = maxScroll / scrollDuration; // pixels per second
+        // Fixed scroll speed (pixels per second) - fast enough to be noticeable, slow enough to read
+        const scrollSpeed = 400;
+        const pauseDuration = 2000; // 2 seconds pause at top and bottom
         
         let lastTimestamp = null;
         let currentScroll = 0;
-        let direction = 1; // 1 for down, -1 for up
+        let isPausing = false;
+        let pauseStartTime = null;
+        let atBottom = false;
         
         const animate = (timestamp) => {
             if (!lastTimestamp) {
@@ -145,30 +146,57 @@ class PinballKiosk {
             }
             
             if (!this.isPaused) {
-                const deltaTime = (timestamp - lastTimestamp) / 1000; // Convert to seconds
-                lastTimestamp = timestamp;
-                
-                // Update scroll position
-                currentScroll += scrollSpeed * deltaTime * direction;
-                
-                // Reverse direction at boundaries for smooth loop
-                if (currentScroll >= maxScroll) {
-                    currentScroll = maxScroll;
-                    direction = -1; // Start scrolling back up
-                } else if (currentScroll <= 0) {
-                    currentScroll = 0;
-                    direction = 1; // Start scrolling down again
+                // Handle pause state
+                if (isPausing) {
+                    if (timestamp - pauseStartTime >= pauseDuration) {
+                        // Pause complete
+                        isPausing = false;
+                        
+                        if (atBottom) {
+                            // Jump back to top after bottom pause
+                            currentScroll = 0;
+                            container.scrollTop = 0;
+                            atBottom = false;
+                            // Start new pause at top
+                            isPausing = true;
+                            pauseStartTime = timestamp;
+                        }
+                    }
+                    lastTimestamp = timestamp;
+                } else {
+                    // Normal scrolling
+                    const deltaTime = (timestamp - lastTimestamp) / 1000; // Convert to seconds
+                    lastTimestamp = timestamp;
+                    
+                    // Update scroll position
+                    currentScroll += scrollSpeed * deltaTime;
+                    
+                    // Check if reached bottom
+                    if (currentScroll >= maxScroll) {
+                        currentScroll = maxScroll;
+                        container.scrollTop = currentScroll;
+                        // Start pause at bottom
+                        isPausing = true;
+                        pauseStartTime = timestamp;
+                        atBottom = true;
+                    } else {
+                        container.scrollTop = currentScroll;
+                    }
                 }
-                
-                container.scrollTop = currentScroll;
             } else {
-                // If paused, just update the timestamp to prevent jump when resumed
+                // If app is paused, just update timestamp to prevent jump when resumed
                 lastTimestamp = timestamp;
+                if (isPausing) {
+                    pauseStartTime = timestamp;
+                }
             }
             
             this.scrollAnimationFrame = requestAnimationFrame(animate);
         };
         
+        // Start with a brief pause at top
+        isPausing = true;
+        pauseStartTime = performance.now();
         this.scrollAnimationFrame = requestAnimationFrame(animate);
     }
     
